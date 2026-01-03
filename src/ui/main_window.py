@@ -48,6 +48,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.set_default_size(1200, 800)
         self.current_wallpaper_path = self._get_current_wallpaper()
         self.search_changed_timer = None
+        self.wallhaven_current_page = 1
+        self.wallhaven_total_pages = 1
+        self.wallhaven_last_search_params = None
+        self.wallhaven_current_page = 1
+        self.wallhaven_total_pages = 1
+        self.wallhaven_last_search_params = None
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.set_content(main_box)
@@ -262,6 +268,25 @@ class WallPickerWindow(Adw.ApplicationWindow):
         )
         search_btn.connect("clicked", self._on_wallhaven_search)
         filter_box.append(search_btn)
+
+        spacer = Gtk.Label()
+        spacer.set_hexpand(True)
+        filter_box.append(spacer)
+
+        prev_btn = Gtk.Button(
+            icon_name="go-previous-symbolic", tooltip_text="Previous page"
+        )
+        prev_btn.connect("clicked", self._on_wallhaven_prev_page)
+        prev_btn.set_sensitive(False)
+        self.wallhaven_prev_btn = prev_btn
+
+        next_btn = Gtk.Button(icon_name="go-next-symbolic", tooltip_text="Next page")
+        next_btn.connect("clicked", self._on_wallhaven_next_page)
+        next_btn.set_sensitive(False)
+        self.wallhaven_next_btn = next_btn
+
+        filter_box.append(prev_btn)
+        filter_box.append(next_btn)
 
         parent.append(filter_box)
 
@@ -549,12 +574,32 @@ class WallPickerWindow(Adw.ApplicationWindow):
         categories = categories_map[self.categories_combo.get_active()]
         sorting = self.sorting_combo.get_active_text()
 
+        if button is not None:
+            self.wallhaven_current_page = 1
+
+        self.wallhaven_last_search_params = {
+            "q": query,
+            "categories": categories,
+            "sorting": sorting,
+        }
+
+        self._perform_wallhaven_search()
+
+    def _perform_wallhaven_search(self):
+        if not self.wallhaven_last_search_params:
+            return
+
+        params = self.wallhaven_last_search_params
         self.wallhaven_status.set_text("Searching...")
         app = Gtk.Application.get_default()
 
         def do_search():
             result = app.wallhaven_service.search(
-                q=query, categories=categories, purity="100", sorting=sorting
+                q=params["q"],
+                categories=params["categories"],
+                purity="100",
+                sorting=params["sorting"],
+                page=self.wallhaven_current_page,
             )
             GLib.idle_add(on_search_done, result)
 
@@ -563,15 +608,36 @@ class WallPickerWindow(Adw.ApplicationWindow):
                 self.wallhaven_status.set_text(f"Error: {result['error']}")
                 return
 
+            meta = result.get("meta", {})
+            self.wallhaven_total_pages = meta.get("last_page", 1)
+            total_results = meta.get("total", 0)
+
             wallpapers = app.wallhaven_service.parse_wallpapers(result.get("data", []))
             list_store = Gio.ListStore()
             for wp in wallpapers:
                 list_store.append(wp)
 
             self.wallhaven_selection.set_model(list_store)
-            self.wallhaven_status.set_text(f"Found {len(wallpapers)} wallpapers")
+            self.wallhaven_status.set_text(
+                f"Page {self.wallhaven_current_page}/{self.wallhaven_total_pages} • {len(wallpapers)} wallpapers from {total_results}"
+            )
+
+            self.wallhaven_prev_btn.set_sensitive(self.wallhaven_current_page > 1)
+            self.wallhaven_next_btn.set_sensitive(
+                self.wallhaven_current_page < self.wallhaven_total_pages
+            )
 
         threading.Thread(target=do_search, daemon=True).start()
+
+    def _on_wallhaven_prev_page(self, button):
+        if self.wallhaven_current_page > 1:
+            self.wallhaven_current_page -= 1
+            self._perform_wallhaven_search()
+
+    def _on_wallhaven_next_page(self, button):
+        if self.wallhaven_current_page < self.wallhaven_total_pages:
+            self.wallhaven_current_page += 1
+            self._perform_wallhaven_search()
 
     def _on_search_wallpapers(self):
         visible_child = self.stack.get_visible_child()
