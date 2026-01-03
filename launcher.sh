@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /home/gotar/Programowanie/wallpicker
+cd "$(dirname "$0")"
 mise exec -- python launcher.py

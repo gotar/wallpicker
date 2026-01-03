@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 # Add src directory to path
-project_dir = Path.home() / "Programowanie" / "wallpicker"
+project_dir = Path(__file__).parent
 src_dir = project_dir / "src"
 sys.path.insert(0, str(src_dir))
 
