@@ -67,3 +67,10 @@ class WallpaperSetter:
         )
         for old in wallpapers[10:]:
             old.unlink(missing_ok=True)
+
+    def get_current_wallpaper(self) -> str | None:
+        if self.symlink_path.is_symlink():
+            target = self.symlink_path.resolve()
+            if target.exists():
+                return str(target)
+        return None
