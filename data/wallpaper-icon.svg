@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3584e4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1c71d8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff7800;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e01b24;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect x="8" y="8" width="112" height="112" rx="16" ry="16" fill="url(#grad1)" />
+  
+  <!-- Picture Frame -->
+  <rect x="16" y="16" width="96" height="72" rx="8" ry="8" fill="#ffffff" />
+  
+  <!-- Mountain/Landscape -->
+  <path d="M 16 72 L 40 48 L 60 64 L 88 32 L 112 72 Z" fill="url(#grad2)" />
+  <circle cx="96" cy="36" r="10" fill="#ffdd22" />
+  
+  <!-- Window Controls -->
+  <circle cx="28" cy="24" r="3" fill="#e6e6e6" />
+  <circle cx="38" cy="24" r="3" fill="#e6e6e6" />
+  <circle cx="48" cy="24" r="3" fill="#e6e6e6" />
+  
+  <!-- Bottom Bar -->
+  <rect x="16" y="88" width="96" height="24" rx="4" ry="4" fill="#ffffff" opacity="0.3" />
+  
+  <!-- Download Icon -->
+  <circle cx="100" cy="100" r="14" fill="#26a269" />
+  <path d="M 100 92 L 100 105 M 94 99 L 100 105 L 106 99" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
