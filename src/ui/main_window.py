@@ -9,20 +9,30 @@ from pathlib import Path
 import requests
 import threading
 import os
+from fuzzywuzzy import fuzz
 
 from services.wallhaven_service import WallhavenService, Wallpaper
 from services.local_service import LocalWallpaperService, LocalWallpaper
 from services.wallpaper_setter import WallpaperSetter
 from services.favorites_service import FavoritesService
 from services.thumbnail_cache import ThumbnailCache
+from services.config_service import ConfigService
 
 
 class MainWindow(Adw.Application):
     def __init__(self):
         super().__init__(application_id="com.github.wallpicker")
         self.window = None
-        self.wallhaven_service = WallhavenService()
-        self.local_service = LocalWallpaperService()
+        self.config = ConfigService()
+
+        api_key = self.config.get("wallhaven_api_key")
+        self.wallhaven_service = WallhavenService(api_key=api_key)
+
+        local_dir = self.config.get("local_wallpapers_dir")
+        if local_dir:
+            local_dir = Path(local_dir)
+        self.local_service = LocalWallpaperService(pictures_dir=local_dir)
+
         self.wallpaper_setter = WallpaperSetter()
         self.favorites_service = FavoritesService()
         self.thumbnail_cache = ThumbnailCache()
@@ -130,6 +140,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
             background: shade(@error_bg_color, 0.9);
             transform: scale(0.98);
         }
+        .favorite-icon {
+            color: #FFD700;
+        }
+        .download-icon {
+            color: #4CAF50;
+        }
         """
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
@@ -149,6 +165,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.search_entry = Gtk.SearchEntry(placeholder_text="Search Wallhaven...")
         self.search_entry.set_hexpand(True)
         self.search_entry.set_max_width_chars(40)
+        self.search_entry.connect("search-changed", self._on_search_changed)
         header.pack_start(self.search_entry)
 
         refresh_btn = Gtk.Button(
@@ -340,12 +357,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         download_btn = Gtk.Button(
             icon_name="folder-download-symbolic",
             tooltip_text="Save to Library",
-            css_classes=["action-button"],
+            css_classes=["action-button", "download-icon"],
         )
         fav_btn = Gtk.Button(
             icon_name="starred-symbolic",
             tooltip_text="Add to Favorites",
-            css_classes=["action-button"],
+            css_classes=["action-button", "favorite-icon"],
         )
 
         btn_box.append(set_btn)
@@ -706,21 +723,42 @@ class WallPickerWindow(Adw.ApplicationWindow):
         )
 
     def _load_local_thumbnail(self, image_widget, path):
+        MAX_FILE_SIZE = 20 * 1024 * 1024
+
         def do_load():
             try:
+                file_size = path.stat().st_size
+                if file_size > MAX_FILE_SIZE:
+                    raise MemoryError(
+                        f"File too large ({file_size / 1024 / 1024:.1f}MB)"
+                    )
+
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                     str(path), 400, 280, True
                 )
-                GLib.idle_add(set_image, pixbuf)
-            except Exception:
-                pass
+                GLib.idle_add(set_image, pixbuf, None)
+            except MemoryError as e:
+                print(f"Memory error loading {path}: {e}")
+                GLib.idle_add(set_image, None, f"File too large")
+            except GLib.GError as e:
+                print(f"Gdk error loading {path}: {e}")
+                GLib.idle_add(set_image, None, str(e))
+            except Exception as e:
+                print(f"Error loading thumbnail for {path}: {e}")
+                GLib.idle_add(set_image, None, str(e))
 
-        def set_image(pixbuf):
+        def set_image(pixbuf, error):
             try:
-                texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                image_widget.set_paintable(texture)
-            except Exception:
-                pass
+                if pixbuf:
+                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+                    image_widget.set_paintable(texture)
+                else:
+                    image_widget.set_icon_name("image-missing-symbolic")
+                    image_widget.set_pixel_size(64)
+            except Exception as e:
+                print(f"Error setting texture: {e}")
+                image_widget.set_icon_name("image-missing-symbolic")
+                image_widget.set_pixel_size(64)
 
         threading.Thread(target=do_load, daemon=True).start()
 
