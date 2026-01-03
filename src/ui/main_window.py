@@ -98,6 +98,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
             background: @accent_bg_color;
             color: @accent_fg_color;
         }
+        .favorite-icon {
+            color: #ffd700;
+        }
+        .download-icon {
+            color: #4caf50;
+        }
         .status-bar {
             padding: 8px 16px;
             background: @headerbar_bg_color;
@@ -339,6 +345,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
         overlay.set_child(image)
+
+        click_gesture = Gtk.GestureClick()
+        click_gesture.set_button(1)
+        click_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click_gesture.connect("pressed", self._on_wallhaven_image_click, list_item)
+        image.add_controller(click_gesture)
         card.append(overlay)
 
         info = Gtk.Label(label="", halign=Gtk.Align.START, css_classes=["dim-label"])
@@ -419,6 +431,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
         overlay.set_child(image)
+
+        click_gesture = Gtk.GestureClick()
+        click_gesture.set_button(1)
+        click_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click_gesture.connect("pressed", self._on_favorite_image_click, list_item)
+        image.add_controller(click_gesture)
         card.append(overlay)
 
         info = Gtk.Label(label="", halign=Gtk.Align.START, css_classes=["dim-label"])
@@ -515,7 +533,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
         def trigger_search():
             self.search_changed_timer = None
-            self._on_wallhaven_search(None)
+            self._on_search_wallpapers()
 
         self.search_changed_timer = GLib.timeout_add(500, trigger_search)
 
@@ -548,6 +566,26 @@ class WallPickerWindow(Adw.ApplicationWindow):
             self.wallhaven_status.set_text(f"Found {len(wallpapers)} wallpapers")
 
         threading.Thread(target=do_search, daemon=True).start()
+
+    def _on_search_wallpapers(self):
+        visible_child = self.stack.get_visible_child()
+
+        if visible_child == self.local_box:
+            self._on_local_search()
+        elif visible_child == self.wallhaven_box:
+            self._on_wallhaven_search(None)
+
+    def _on_local_search(self):
+        query = self.search_entry.get_text()
+        app = Gtk.Application.get_default()
+
+        wallpapers = app.local_service.search_wallpapers(query)
+        list_store = Gio.ListStore()
+        for wp in wallpapers:
+            list_store.append(wp)
+
+        self.local_selection.set_model(list_store)
+        self.local_status.set_text(f"Found {len(wallpapers)} wallpapers")
 
     def _load_thumbnail(self, image_widget, url):
         app = Gtk.Application.get_default()
@@ -582,6 +620,21 @@ class WallPickerWindow(Adw.ApplicationWindow):
                 )
 
         threading.Thread(target=do_download, daemon=True).start()
+
+    def _on_wallhaven_image_click(self, gesture, n_press, x, y, list_item):
+        if n_press == 2:
+            wallpaper = list_item.get_item()
+            self._on_set_wallhaven_wallpaper(None, wallpaper)
+
+    def _on_local_image_click(self, gesture, n_press, x, y, list_item):
+        if n_press == 2:
+            wallpaper = list_item.get_item()
+            self._on_set_local_wallpaper(None, wallpaper)
+
+    def _on_favorite_image_click(self, gesture, n_press, x, y, list_item):
+        if n_press == 2:
+            wallpaper = list_item.get_item()
+            self._on_set_favorite_wallpaper(None, wallpaper)
 
     def _on_download_wallpaper(self, button, wallpaper):
         app = Gtk.Application.get_default()
@@ -655,6 +708,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
         overlay.set_child(image)
+
+        click_gesture = Gtk.GestureClick()
+        click_gesture.set_button(1)
+        click_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click_gesture.connect("pressed", self._on_local_image_click, list_item)
+        image.add_controller(click_gesture)
 
         current_badge = Gtk.Label(
             label="CURRENT", halign=Gtk.Align.END, valign=Gtk.Align.START
