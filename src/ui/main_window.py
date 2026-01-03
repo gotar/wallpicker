@@ -58,7 +58,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         .wallpaper-card {
             background: @card_bg_color;
             border-radius: 12px;
-            padding: 8px;
+            padding: 6px;
             transition: all 200ms ease;
         }
         .wallpaper-card:hover {
@@ -74,8 +74,9 @@ class WallPickerWindow(Adw.ApplicationWindow):
             box-shadow: 0 0 12px @accent_bg_color;
         }
         .action-button {
-            border-radius: 8px;
-            padding: 6px 12px;
+            border-radius: 6px;
+            min-height: 32px;
+            min-width: 32px;
         }
         .destructive-action {
             background: @error_bg_color;
@@ -95,9 +96,13 @@ class WallPickerWindow(Adw.ApplicationWindow):
             background: @headerbar_bg_color;
             border-bottom: 1px solid @borders;
         }
-        .tab-toolbar {
-            padding: 8px 12px;
-            background: alpha(@card_bg_color, 0.5);
+        .current-badge {
+            background: @accent_bg_color;
+            color: @accent_fg_color;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: bold;
         }
         """
         provider = Gtk.CssProvider()
@@ -181,7 +186,9 @@ class WallPickerWindow(Adw.ApplicationWindow):
         sort_box.append(self.sorting_combo)
         filter_box.append(sort_box)
 
-        search_btn = Gtk.Button(label="Search", css_classes=["suggested-action"])
+        search_btn = Gtk.Button(
+            icon_name="system-search-symbolic", css_classes=["suggested-action"]
+        )
         search_btn.connect("clicked", self._on_wallhaven_search)
         filter_box.append(search_btn)
 
@@ -192,7 +199,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
         self.wallhaven_grid = Gtk.GridView()
         self.wallhaven_grid.set_min_columns(2)
-        self.wallhaven_grid.set_max_columns(5)
+        self.wallhaven_grid.set_max_columns(4)
         self.wallhaven_selection = Gtk.SingleSelection()
         self.wallhaven_selection.set_autoselect(False)
         self.wallhaven_grid.set_model(self.wallhaven_selection)
@@ -211,50 +218,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         parent.append(self.wallhaven_status)
 
     def _create_local_ui(self, parent):
-        toolbar = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=8,
-            css_classes=["tab-toolbar"],
-        )
-
-        refresh_btn = Gtk.Button(
-            icon_name="view-refresh-symbolic", tooltip_text="Refresh"
-        )
-        refresh_btn.connect("clicked", self._on_local_refresh)
-        toolbar.append(refresh_btn)
-
-        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
-
-        fav_btn = Gtk.Button(
-            icon_name="emblem-favorite-symbolic", tooltip_text="Add to Favorites"
-        )
-        fav_btn.connect("clicked", self._on_add_local_to_favorites)
-        toolbar.append(fav_btn)
-
-        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
-
-        trash_btn = Gtk.Button(
-            icon_name="user-trash-symbolic", tooltip_text="Move to Trash"
-        )
-        trash_btn.connect("clicked", self._on_delete_selected)
-        toolbar.append(trash_btn)
-
-        delete_btn = Gtk.Button(
-            label="Delete Forever",
-            css_classes=["destructive-action"],
-            tooltip_text="Permanently delete",
-        )
-        delete_btn.connect("clicked", self._on_delete_permanently)
-        toolbar.append(delete_btn)
-
-        parent.append(toolbar)
-
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
 
         self.local_grid = Gtk.GridView()
         self.local_grid.set_min_columns(2)
-        self.local_grid.set_max_columns(5)
+        self.local_grid.set_max_columns(4)
         self.local_selection = Gtk.SingleSelection()
         self.local_selection.set_autoselect(False)
         self.local_grid.set_model(self.local_selection)
@@ -271,26 +240,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         parent.append(self.local_status)
 
     def _create_favorites_ui(self, parent):
-        toolbar = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=8,
-            css_classes=["tab-toolbar"],
-        )
-
-        refresh_btn = Gtk.Button(
-            icon_name="view-refresh-symbolic", tooltip_text="Refresh"
-        )
-        refresh_btn.connect("clicked", self._on_favorites_refresh)
-        toolbar.append(refresh_btn)
-
-        parent.append(toolbar)
-
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
 
         self.favorites_grid = Gtk.GridView()
         self.favorites_grid.set_min_columns(2)
-        self.favorites_grid.set_max_columns(5)
+        self.favorites_grid.set_max_columns(4)
         self.favorites_selection = Gtk.SingleSelection()
         self.favorites_selection.set_autoselect(False)
         self.favorites_grid.set_model(self.favorites_selection)
@@ -311,20 +266,24 @@ class WallPickerWindow(Adw.ApplicationWindow):
     def _on_wallhaven_item_setup(self, factory, list_item):
         card = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=8,
+            spacing=6,
             css_classes=["wallpaper-card"],
         )
-        card.set_margin_start(8)
-        card.set_margin_end(8)
-        card.set_margin_top(8)
-        card.set_margin_bottom(8)
+        card.set_margin_start(6)
+        card.set_margin_end(6)
+        card.set_margin_top(6)
+        card.set_margin_bottom(6)
 
-        image = Gtk.Image()
-        image.set_size_request(300, 180)
+        overlay = Gtk.Overlay()
+        image = Gtk.Picture()
+        image.set_size_request(-1, 220)
+        image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
-        card.append(image)
+        overlay.set_child(image)
+        card.append(overlay)
 
         info = Gtk.Label(label="", halign=Gtk.Align.START, css_classes=["dim-label"])
+        info.set_ellipsize(3)
         card.append(info)
 
         btn_box = Gtk.Box(
@@ -332,11 +291,19 @@ class WallPickerWindow(Adw.ApplicationWindow):
         )
 
         set_btn = Gtk.Button(
-            label="Set", css_classes=["action-button", "suggested-action"]
+            icon_name="emblem-ok-symbolic",
+            tooltip_text="Set as Wallpaper",
+            css_classes=["action-button", "suggested-action"],
         )
-        download_btn = Gtk.Button(label="Save", css_classes=["action-button"])
+        download_btn = Gtk.Button(
+            icon_name="folder-download-symbolic",
+            tooltip_text="Save to Library",
+            css_classes=["action-button"],
+        )
         fav_btn = Gtk.Button(
-            icon_name="emblem-favorite-symbolic", css_classes=["action-button"]
+            icon_name="starred-symbolic",
+            tooltip_text="Add to Favorites",
+            css_classes=["action-button"],
         )
 
         btn_box.append(set_btn)
@@ -362,8 +329,10 @@ class WallPickerWindow(Adw.ApplicationWindow):
         app = Gtk.Application.get_default()
         is_fav = app.favorites_service.is_favorite(wallpaper.id)
         if is_fav:
+            list_item.fav_btn.set_icon_name("starred-symbolic")
             list_item.fav_btn.add_css_class("suggested-action")
         else:
+            list_item.fav_btn.set_icon_name("non-starred-symbolic")
             list_item.fav_btn.remove_css_class("suggested-action")
 
         list_item.set_btn.connect(
@@ -379,20 +348,24 @@ class WallPickerWindow(Adw.ApplicationWindow):
     def _on_favorite_item_setup(self, factory, list_item):
         card = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=8,
+            spacing=6,
             css_classes=["wallpaper-card"],
         )
-        card.set_margin_start(8)
-        card.set_margin_end(8)
-        card.set_margin_top(8)
-        card.set_margin_bottom(8)
+        card.set_margin_start(6)
+        card.set_margin_end(6)
+        card.set_margin_top(6)
+        card.set_margin_bottom(6)
 
-        image = Gtk.Image()
-        image.set_size_request(300, 180)
+        overlay = Gtk.Overlay()
+        image = Gtk.Picture()
+        image.set_size_request(-1, 220)
+        image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
-        card.append(image)
+        overlay.set_child(image)
+        card.append(overlay)
 
         info = Gtk.Label(label="", halign=Gtk.Align.START, css_classes=["dim-label"])
+        info.set_ellipsize(3)
         card.append(info)
 
         btn_box = Gtk.Box(
@@ -400,11 +373,18 @@ class WallPickerWindow(Adw.ApplicationWindow):
         )
 
         set_btn = Gtk.Button(
-            label="Set", css_classes=["action-button", "suggested-action"]
+            icon_name="emblem-ok-symbolic",
+            tooltip_text="Set as Wallpaper",
+            css_classes=["action-button", "suggested-action"],
         )
-        download_btn = Gtk.Button(label="Save", css_classes=["action-button"])
+        download_btn = Gtk.Button(
+            icon_name="folder-download-symbolic",
+            tooltip_text="Save to Library",
+            css_classes=["action-button"],
+        )
         remove_btn = Gtk.Button(
             icon_name="user-trash-symbolic",
+            tooltip_text="Remove from Favorites",
             css_classes=["action-button", "destructive-action"],
         )
 
@@ -425,7 +405,10 @@ class WallPickerWindow(Adw.ApplicationWindow):
         if not wallpaper:
             return
 
-        self._load_thumbnail(list_item.image, wallpaper.thumbs_large)
+        if wallpaper.thumbs_large.startswith("file://"):
+            self._load_local_thumbnail(list_item.image, wallpaper.thumbs_large[7:])
+        else:
+            self._load_thumbnail(list_item.image, wallpaper.thumbs_large)
         list_item.info.set_text(f"{wallpaper.resolution} • {wallpaper.category}")
 
         list_item.set_btn.connect(
@@ -440,17 +423,16 @@ class WallPickerWindow(Adw.ApplicationWindow):
         app = Gtk.Application.get_default()
         if app.favorites_service.is_favorite(wallpaper.id):
             app.favorites_service.remove_favorite(wallpaper.id)
+            btn_widget.set_icon_name("non-starred-symbolic")
             btn_widget.remove_css_class("suggested-action")
         else:
             app.favorites_service.add_favorite(wallpaper)
+            btn_widget.set_icon_name("starred-symbolic")
             btn_widget.add_css_class("suggested-action")
 
     def _on_remove_favorite(self, button, wallpaper):
         app = Gtk.Application.get_default()
         app.favorites_service.remove_favorite(wallpaper.id)
-        self._load_favorites()
-
-    def _on_favorites_refresh(self, button):
         self._load_favorites()
 
     def _load_favorites(self):
@@ -517,7 +499,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         def set_image(data):
             try:
                 texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
-                image_widget.set_from_paintable(texture)
+                image_widget.set_paintable(texture)
             except Exception:
                 pass
 
@@ -589,79 +571,32 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
         self.local_status.set_text(f"{len(wallpapers)} wallpapers")
 
-    def _on_local_refresh(self, button):
+    def _on_local_refresh(self, button=None):
         self.current_wallpaper_path = self._get_current_wallpaper()
         self._load_local_wallpapers()
-
-    def _on_add_local_to_favorites(self, button):
-        selected = self.local_selection.get_selected_item()
-        if not selected:
-            self.local_status.set_text("Select a wallpaper first")
-            return
-
-        app = Gtk.Application.get_default()
-        local_wp = Wallpaper(
-            id=f"local_{selected.filename}",
-            url=f"file://{selected.path}",
-            path=str(selected.path),
-            thumbs_large=f"file://{selected.path}",
-            thumbs_small=f"file://{selected.path}",
-            resolution=f"{selected.size} bytes",
-            category="local",
-            purity="sfw",
-            colors=[],
-            file_size=selected.size,
-        )
-        app.favorites_service.add_favorite(local_wp)
-        self.local_status.set_text(f"Added {selected.filename} to favorites")
-
-    def _on_delete_selected(self, button):
-        selected = self.local_selection.get_selected_item()
-        if not selected:
-            self.local_status.set_text("Select a wallpaper first")
-            return
-
-        app = Gtk.Application.get_default()
-        if app.local_service.delete_wallpaper(selected.path):
-            self._load_local_wallpapers()
-            self.local_status.set_text("Moved to trash")
-        else:
-            self.local_status.set_text("Failed to delete")
-
-    def _on_delete_permanently(self, button):
-        selected = self.local_selection.get_selected_item()
-        if not selected:
-            self.local_status.set_text("Select a wallpaper first")
-            return
-
-        try:
-            os.remove(selected.path)
-            self._load_local_wallpapers()
-            self.local_status.set_text("Permanently deleted")
-        except Exception as e:
-            self.local_status.set_text(f"Failed: {e}")
 
     def _on_local_item_setup(self, factory, list_item):
         card = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=8,
+            spacing=6,
             css_classes=["wallpaper-card"],
         )
-        card.set_margin_start(8)
-        card.set_margin_end(8)
-        card.set_margin_top(8)
-        card.set_margin_bottom(8)
+        card.set_margin_start(6)
+        card.set_margin_end(6)
+        card.set_margin_top(6)
+        card.set_margin_bottom(6)
 
         overlay = Gtk.Overlay()
-        image = Gtk.Image()
-        image.set_size_request(300, 180)
+        image = Gtk.Picture()
+        image.set_size_request(-1, 220)
+        image.set_content_fit(Gtk.ContentFit.COVER)
         image.add_css_class("wallpaper-image")
         overlay.set_child(image)
 
         current_badge = Gtk.Label(
             label="CURRENT", halign=Gtk.Align.END, valign=Gtk.Align.START
         )
-        current_badge.add_css_class("suggested-action")
+        current_badge.add_css_class("current-badge")
         current_badge.set_margin_top(8)
         current_badge.set_margin_end(8)
         current_badge.set_visible(False)
@@ -669,28 +604,43 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
         card.append(overlay)
 
-        info = Gtk.Label(
-            label="", halign=Gtk.Align.START, ellipsize=3, max_width_chars=30
-        )
+        info = Gtk.Label(label="", halign=Gtk.Align.START, css_classes=["dim-label"])
+        info.set_ellipsize(3)
+        info.set_max_width_chars(35)
         card.append(info)
 
-        size_label = Gtk.Label(
-            label="", halign=Gtk.Align.START, css_classes=["dim-label"]
+        btn_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True
         )
-        card.append(size_label)
 
         set_btn = Gtk.Button(
-            label="Set Wallpaper", css_classes=["action-button", "suggested-action"]
+            icon_name="emblem-ok-symbolic",
+            tooltip_text="Set as Wallpaper",
+            css_classes=["action-button", "suggested-action"],
         )
-        card.append(set_btn)
+        fav_btn = Gtk.Button(
+            icon_name="starred-symbolic",
+            tooltip_text="Add to Favorites",
+            css_classes=["action-button"],
+        )
+        trash_btn = Gtk.Button(
+            icon_name="user-trash-symbolic",
+            tooltip_text="Move to Trash",
+            css_classes=["action-button", "destructive-action"],
+        )
+
+        btn_box.append(set_btn)
+        btn_box.append(fav_btn)
+        btn_box.append(trash_btn)
+        card.append(btn_box)
 
         list_item.set_child(card)
         list_item.image = image
         list_item.info = info
-        list_item.size_label = size_label
         list_item.set_btn = set_btn
+        list_item.fav_btn = fav_btn
+        list_item.trash_btn = trash_btn
         list_item.current_badge = current_badge
-        list_item.card = card
 
     def _on_local_item_bind(self, factory, list_item):
         wallpaper = list_item.get_item()
@@ -698,9 +648,8 @@ class WallPickerWindow(Adw.ApplicationWindow):
             return
 
         self._load_local_thumbnail(list_item.image, wallpaper.path)
-        list_item.info.set_text(wallpaper.filename)
         size_mb = wallpaper.size / (1024 * 1024)
-        list_item.size_label.set_text(f"{size_mb:.1f} MB")
+        list_item.info.set_text(f"{wallpaper.filename} • {size_mb:.1f} MB")
 
         is_current = (
             self.current_wallpaper_path
@@ -713,12 +662,18 @@ class WallPickerWindow(Adw.ApplicationWindow):
             list_item.image.remove_css_class("current-wallpaper")
 
         list_item.set_btn.connect("clicked", self._on_set_local_wallpaper, wallpaper)
+        list_item.fav_btn.connect(
+            "clicked", self._on_add_local_to_favorites_btn, wallpaper
+        )
+        list_item.trash_btn.connect(
+            "clicked", self._on_delete_local_wallpaper, wallpaper
+        )
 
     def _load_local_thumbnail(self, image_widget, path):
         def do_load():
             try:
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                    str(path), 300, 180, True
+                    str(path), 400, 280, True
                 )
                 GLib.idle_add(set_image, pixbuf)
             except Exception:
@@ -727,7 +682,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         def set_image(pixbuf):
             try:
                 texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                image_widget.set_from_paintable(texture)
+                image_widget.set_paintable(texture)
             except Exception:
                 pass
 
@@ -741,3 +696,28 @@ class WallPickerWindow(Adw.ApplicationWindow):
             self._load_local_wallpapers()
         else:
             self.local_status.set_text("Failed to set wallpaper")
+
+    def _on_add_local_to_favorites_btn(self, button, wallpaper):
+        app = Gtk.Application.get_default()
+        local_wp = Wallpaper(
+            id=f"local_{wallpaper.filename}",
+            url=f"file://{wallpaper.path}",
+            path=str(wallpaper.path),
+            thumbs_large=f"file://{wallpaper.path}",
+            thumbs_small=f"file://{wallpaper.path}",
+            resolution=f"{wallpaper.size} bytes",
+            category="local",
+            purity="sfw",
+            colors=[],
+            file_size=wallpaper.size,
+        )
+        app.favorites_service.add_favorite(local_wp)
+        self.local_status.set_text(f"Added {wallpaper.filename} to favorites")
+
+    def _on_delete_local_wallpaper(self, button, wallpaper):
+        app = Gtk.Application.get_default()
+        if app.local_service.delete_wallpaper(wallpaper.path):
+            self._load_local_wallpapers()
+            self.local_status.set_text("Moved to trash")
+        else:
+            self.local_status.set_text("Failed to delete")
