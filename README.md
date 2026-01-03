@@ -41,7 +41,7 @@ A modern GTK4/Libadwaita wallpaper picker application. Browse and discover wallp
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/pgotar/wallpicker.git
+git clone https://github.com/gotar/wallpicker.git
 cd wallpicker
 ```
 
@@ -57,17 +57,40 @@ pip install -r requirements.txt
 
 ### Arch Linux / Arch-based Distributions
 
-Install system dependencies:
+WallPicker is available in the Arch User Repository (AUR).
+
+#### Install from AUR (Recommended)
+
+Using yay:
 ```bash
-sudo pacman -S python python-gobject gtk4 libadwaita python-requests python-send2trash
+yay -S wallpicker
+```
+
+Using paru:
+```bash
+paru -S wallpicker
+```
+
+Manual AUR installation:
+```bash
+git clone https://aur.archlinux.org/wallpicker.git
+cd wallpicker
+makepkg -si
+```
+
+#### Build from PKGBUILD
+
+If you prefer to build from the repository:
+```bash
+git clone https://github.com/gotar/wallpicker.git
+cd wallpicker
+makepkg -si
 ```
 
 For animated transitions (optional but recommended):
 ```bash
 yay -S awww
 ```
-
-Then install WallPicker from git as described above.
 
 ## Usage
 

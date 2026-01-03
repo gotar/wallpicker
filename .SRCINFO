@@ -1,0 +1,23 @@
+pkgbase = wallpicker
+	pkgdesc = Modern GTK4/Libadwaita wallpaper picker with Wallhaven integration
+	pkgver = 1.0
+	pkgrel = 1
+	url = https://github.com/gotar/wallpicker
+	arch = any
+	license = MIT
+	makedepends = python-setuptools
+	makedepends = git
+	depends = python>=3.11
+	depends = python-gobject
+	depends = gtk4
+	depends = libadwaita
+	depends = python-requests
+	depends = python-pillow
+	depends = python-send2trash
+	depends = python-aiohttp
+	depends = python-rapidfuzz
+	optdepends = awww: Animated wallpaper transitions
+	source = wallpicker::git+https://github.com/gotar/wallpicker.git#tag=v1.0
+	sha256sums = SKIP
+
+pkgname = wallpicker
