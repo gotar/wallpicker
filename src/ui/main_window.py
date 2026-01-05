@@ -47,8 +47,6 @@ class MainWindow(Adw.Application):
             local_service = LocalWallpaperService(pictures_dir=pictures_dir)
             favorites_service = FavoritesService()
             wallhaven_service = WallhavenService()
-            thumbnail_cache = ThumbnailCache()
-
             self.wallhaven_view_model = WallhavenViewModel(
                 wallhaven_service=wallhaven_service,
                 thumbnail_cache=thumbnail_cache,
@@ -74,9 +72,7 @@ class MainWindow(Adw.Application):
         self.window.present()
 
 
-class WallPickerWindow(Adw.ApplicationWindow):
     """Main application window with MVVM architecture."""
-
     def __init__(
         self,
         application,
