@@ -131,27 +131,12 @@ class WallhavenView(Gtk.Box):
         self.append(status_box)
 
     def _bind_to_view_model(self):
-        """Bind View to ViewModel state changes"""
         GObject.Object.bind_property(
             self.view_model,
             "is-busy",
             self.loading_spinner,
             "spinning",
             GObject.BindingFlags.DEFAULT,
-        )
-        GObject.Object.bind_property(
-            self.view_model,
-            "error-message",
-            self.error_label,
-            "label",
-            GObject.BindingFlags.DEFAULT,
-        )
-        GObject.Object.bind_property(
-            self.view_model,
-            "error-message",
-            self.error_label,
-            "visible",
-            GObject.BindingFlags.SYNC_CREATE,
         )
         self.view_model.connect("notify::wallpapers", self._on_wallpapers_changed)
         self.view_model.connect("notify::current-page", self._on_page_changed)
@@ -274,19 +259,14 @@ class WallhavenView(Gtk.Box):
         self._on_set_wallpaper(None, wallpaper)
 
     def _on_add_to_favorites(self, button, wallpaper):
-        def on_task_done(task, result):
-            pass
-
-        def run_async():
+        def on_idle():
             import asyncio
 
-            async_task = self.view_model.add_to_favorites(wallpaper)
-            return asyncio.run(async_task)
+            asyncio.run(self.view_model.add_to_favorites(wallpaper))
 
         from gi.repository import GLib
 
-        task = GLib.Task.new(None, run_async, on_task_done)
-        task.run_in_thread()
+        GLib.Idle.add(on_idle)
 
     def _get_category(self) -> str:
         """Get selected category code"""

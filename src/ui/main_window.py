@@ -39,16 +39,11 @@ class MainWindow(Adw.Application):
         self.wallhaven_view_model = None
 
     def do_activate(self):
-        """Activate application - show main window."""
-        if self.debug:
-            print("DEBUG: MainWindow.do_activate()")
         if not self.window:
-            # Initialize services
             self.config_service = ConfigService()
             config = self.config_service.get_config()
             pictures_dir = config.pictures_dir
 
-            print(f"DEBUG: Pictures dir: {pictures_dir}")
             self.wallpaper_setter = WallpaperSetter()
             local_service = LocalWallpaperService(pictures_dir=pictures_dir)
             favorites_service = FavoritesService()

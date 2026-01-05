@@ -85,27 +85,12 @@ class FavoritesView(Gtk.Box):
         self.append(self.scroll)
 
     def _bind_to_view_model(self):
-        """Bind View to ViewModel state changes"""
         GObject.Object.bind_property(
             self.view_model,
             "is-busy",
             self.loading_spinner,
             "spinning",
             GObject.BindingFlags.DEFAULT,
-        )
-        GObject.Object.bind_property(
-            self.view_model,
-            "error-message",
-            self.error_label,
-            "label",
-            GObject.BindingFlags.DEFAULT,
-        )
-        GObject.Object.bind_property(
-            self.view_model,
-            "error-message",
-            self.error_label,
-            "visible",
-            GObject.BindingFlags.SYNC_CREATE,
         )
         self.view_model.connect("notify::favorites", self._on_favorites_changed)
 
