@@ -1,4 +1,3 @@
-import os
 import subprocess
 from pathlib import Path
 
@@ -6,9 +5,7 @@ from pathlib import Path
 class WallpaperSetter:
     def __init__(self):
         self.cache_dir = Path.home() / ".cache" / "wallpaper"
-        self.symlink_path = (
-            Path.home() / ".config" / "omarchy" / "current" / "background"
-        )
+        self.symlink_path = Path.home() / ".config" / "omarchy" / "current" / "background"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symlink_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -30,7 +27,9 @@ class WallpaperSetter:
         result = subprocess.run(["pgrep", "-x", "awww-daemon"], capture_output=True)
         if result.returncode != 0:
             subprocess.Popen(
-                ["awww-daemon"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                ["awww-daemon"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             import time
 
@@ -39,6 +38,7 @@ class WallpaperSetter:
     def _update_symlink(self, path: Path):
         if self.symlink_path.is_symlink():
             self.symlink_path.unlink()
+
         self.symlink_path.symlink_to(path)
 
     def _apply_wallpaper(self, path: Path):
@@ -70,7 +70,10 @@ class WallpaperSetter:
 
     def get_current_wallpaper(self) -> str | None:
         if self.symlink_path.is_symlink():
-            target = self.symlink_path.resolve()
-            if target.exists():
-                return str(target)
+            try:
+                target = self.symlink_path.resolve()
+                if target.exists():
+                    return str(target)
+            except:
+                pass
         return None

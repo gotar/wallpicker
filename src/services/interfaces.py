@@ -2,11 +2,9 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional
 
-from domain.wallpaper import Wallpaper, WallpaperSource, WallpaperPurity
 from domain.config import Config
-from domain.exceptions import ServiceError
+from domain.wallpaper import Wallpaper
 
 
 class IWallpaperService(ABC):
@@ -18,7 +16,7 @@ class IWallpaperService(ABC):
         query: str = "",
         page: int = 1,
         **kwargs,
-    ) -> List[Wallpaper]:
+    ) -> list[Wallpaper]:
         """Search for wallpapers.
 
         Args:
@@ -64,12 +62,12 @@ class IFavoritesService(ABC):
         pass
 
     @abstractmethod
-    def get_favorites(self) -> List[Wallpaper]:
+    def get_favorites(self) -> list[Wallpaper]:
         """Get all favorite wallpapers."""
         pass
 
     @abstractmethod
-    def search_favorites(self, query: str) -> List[Wallpaper]:
+    def search_favorites(self, query: str) -> list[Wallpaper]:
         """Search favorites by query."""
         pass
 
@@ -92,7 +90,7 @@ class IThumbnailCache(ABC):
     """Interface for thumbnail caching."""
 
     @abstractmethod
-    def get_thumbnail(self, url: str, size: str = "small") -> Optional[Path]:
+    def get_thumbnail(self, url: str, size: str = "small") -> Path | None:
         """Get cached thumbnail or None if not cached."""
         pass
 
@@ -116,6 +114,6 @@ class IWallpaperSetter(ABC):
         pass
 
     @abstractmethod
-    def get_current_wallpaper(self) -> Optional[Path]:
+    def get_current_wallpaper(self) -> Path | None:
         """Get currently set wallpaper path."""
         pass

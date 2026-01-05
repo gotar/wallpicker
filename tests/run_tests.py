@@ -1,21 +1,20 @@
-import unittest
-import json
 import os
 import shutil
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 # Add src to path
 import sys
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from services.wallhaven_service import WallhavenService, Wallpaper
-from services.local_service import LocalWallpaperService
-from services.favorites_service import FavoritesService
-from services.wallpaper_setter import WallpaperSetter
-from services.thumbnail_cache import ThumbnailCache
 from services.config_service import ConfigService
+from services.favorites_service import FavoritesService
+from services.local_service import LocalWallpaperService
+from services.thumbnail_cache import ThumbnailCache
+from services.wallhaven_service import WallhavenService, Wallpaper
+from services.wallpaper_setter import WallpaperSetter
 
 
 class TestWallhavenService(unittest.TestCase):

@@ -1,210 +1,214 @@
-"""
-Wallhaven API Service
-Handles searching, downloading wallpapers from wallhaven.cc
-"""
+"""Wallhaven Service using async patterns and domain models."""
 
-import os
-import requests
-import time
+import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import Dict, List, Optional
-from gi.repository import GObject
+from typing import Any
+
+import aiohttp
+
+from domain.exceptions import ServiceError
+from domain.wallpaper import Resolution, Wallpaper, WallpaperPurity, WallpaperSource
+from services.base import BaseService
 
 
-class Wallpaper(GObject.Object):
-    __gtype_name__ = "Wallpaper"
-
-    def __init__(
-        self,
-        id: str,
-        url: str,
-        path: str,
-        thumbs_large: str,
-        thumbs_small: str,
-        resolution: str,
-        category: str,
-        purity: str,
-        colors: List[str],
-        file_size: int,
-    ):
-        super().__init__()
-        self.id = id
-        self.url = url
-        self.path = path  # Direct download URL
-        self.thumbs_large = thumbs_large
-        self.thumbs_small = thumbs_small
-        self.resolution = resolution
-        self.category = category
-        self.purity = purity
-        self.colors = colors
-        self.file_size = file_size
-
-
-class WallhavenService:
-    """Service for interacting with Wallhaven API"""
+class WallhavenService(BaseService):
+    """Async service for searching and downloading wallpapers from Wallhaven API."""
 
     BASE_URL = "https://wallhaven.cc/api/v1"
     RATE_LIMIT = 45  # requests per minute
-    RATE_LIMIT_DELAY = 60.0 / RATE_LIMIT  # seconds between requests
+    REQUEST_INTERVAL = 60 / RATE_LIMIT  # seconds between requests
 
     PRESETS = {
-        "General Landscape": {
-            "categories": "100",
-            "purity": "100",
-            "q": "landscape dark",
-        },
-        "Anime Scenery": {"categories": "010", "purity": "100", "q": "scenery dark"},
-        "Nature": {"categories": "100", "purity": "100", "q": "nature"},
-        "Architecture": {"categories": "100", "purity": "100", "q": "architecture"},
-        "Cyberpunk": {"categories": "100", "purity": "100", "q": "cyberpunk"},
-        "Space": {"categories": "100", "purity": "100", "q": "space"},
-        "Forest": {"categories": "100", "purity": "100", "q": "forest"},
-        "Mountain": {"categories": "100", "purity": "100", "q": "mountain"},
+        "Anime": {"purity": "sfw", "categories": "010"},
+        "People": {"purity": "sfw", "categories": "001"},
+        "General": {"purity": "sfw", "categories": "100"},
+        "Anime NSFW": {"purity": "nsfw", "categories": "010"},
+        "People NSFW": {"purity": "nsfw", "categories": "001"},
+        "General NSFW": {"purity": "nsfw", "categories": "100"},
     }
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.last_request_time = 0
-
-    def _rate_limit(self):
-        """Enforce rate limiting"""
-        current_time = time.time()
-        time_since_last = current_time - self.last_request_time
-        if time_since_last < self.RATE_LIMIT_DELAY:
-            time.sleep(self.RATE_LIMIT_DELAY - time_since_last)
-        self.last_request_time = time.time()
-
-    def _get_headers(self) -> Dict[str, str]:
-        """Get request headers with optional API key"""
-        headers = {"User-Agent": "wallpicker/1.0"}
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        return headers
-
-    def search(
-        self,
-        q: str = "",
-        categories: str = "111",  # General/Anime/People
-        purity: str = "100",  # SFW only
-        sorting: str = "date_added",
-        order: str = "desc",
-        atleast: str = "1920x1080",
-        page: int = 1,
-    ) -> Dict:
-        """
-        Search wallpapers on Wallhaven
+    def __init__(self, api_key: str | None = None) -> None:
+        """Initialize Wallhaven service.
 
         Args:
-            q: Search query (tags, keywords)
-            categories: 3-character string (e.g., "111" = all)
-            purity: 3-character string (e.g., "100" = SFW only)
-            sorting: Sort method (date_added, relevance, random, etc.)
-            order: Sort order (desc, asc)
-            atleast: Minimum resolution
+            api_key: Wallhaven API key (optional but recommended for higher rate limits)
+        """
+        super().__init__()
+        self.api_key = api_key
+        self._last_request_time = 0.0
+        self._session: aiohttp.ClientSession | None = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp session."""
+        if self._session is None or self._session.closed:
+            headers = {}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+
+            self._session = aiohttp.ClientSession(headers=headers)
+
+        return self._session
+
+    async def _rate_limit(self) -> None:
+        """Enforce rate limiting between requests."""
+        now = asyncio.get_event_loop().time()
+        time_since_last = now - self._last_request_time
+
+        if time_since_last < self.REQUEST_INTERVAL:
+            await asyncio.sleep(self.REQUEST_INTERVAL - time_since_last)
+
+        self._last_request_time = asyncio.get_event_loop().time()
+
+    async def search(
+        self,
+        query: str = "",
+        page: int = 1,
+        categories: str = "111",
+        purity: str = "sfw",
+        sorting: str = "relevance",
+        order: str = "desc",
+        atleast: str = "",
+    ) -> list[Wallpaper]:
+        """Search Wallhaven for wallpapers.
+
+        Args:
+            query: Search query string
             page: Page number
+            categories: Binary string for categories (general, anime, people)
+            purity: Content purity (sfw, sketchy, nsfw)
+            sorting: Sort method (relevance, random, views, favorites, toplist)
+            order: Sort order (asc, desc)
+            atleast: Minimum resolution (e.g., "1920x1080")
 
         Returns:
-            Dict with 'data' (list of wallpapers) and 'meta' (pagination info)
+            List of Wallpaper domain models
         """
-        self._rate_limit()
+        await self._rate_limit()
 
-        params = {
-            "q": q,
+        session = await self._get_session()
+
+        params: dict[str, Any] = {
+            "page": page,
+            "q": query,
             "categories": categories,
             "purity": purity,
             "sorting": sorting,
             "order": order,
-            "atleast": atleast,
-            "page": page,
         }
 
+        if atleast:
+            params["atleast"] = atleast
+
         try:
-            response = self.session.get(
-                f"{self.BASE_URL}/search", headers=self._get_headers(), params=params
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e), "data": []}
+            self.log_info(f"Searching Wallhaven: query='{query}', page={page}")
+            async with session.get(f"{self.BASE_URL}/search", params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
 
-    def parse_wallpapers(self, data: List[Dict]) -> List[Wallpaper]:
-        """Parse API response into Wallpaper objects"""
-        wallpapers = []
-        for item in data:
-            wp = Wallpaper(
-                id=item["id"],
-                url=item["url"],
-                path=item["path"],
-                thumbs_large=item["thumbs"]["large"],
-                thumbs_small=item["thumbs"]["small"],
-                resolution=item["resolution"],
-                category=item["category"],
-                purity=item["purity"],
-                colors=item["colors"],
-                file_size=item["file_size"],
-            )
-            wallpapers.append(wp)
-        return wallpapers
+            wallpapers: list[Wallpaper] = []
+            for item in data.get("data", []):
+                try:
+                    wallpaper = self._wallpaper_from_dict(item)
+                    wallpapers.append(wallpaper)
+                except (KeyError, ValueError) as e:
+                    self.log_warning(f"Failed to parse wallpaper: {e}")
 
-    def search_preset(self, preset_name: str, page: int = 1) -> Dict:
-        """
-        Search using predefined preset from scripts
+            self.log_debug(f"Found {len(wallpapers)} wallpapers")
+            return wallpapers
+        except (aiohttp.ClientError, KeyError) as e:
+            self.log_error(f"Wallhaven search failed: {e}", exc_info=True)
+            raise ServiceError(f"Failed to search Wallhaven: {e}") from e
+
+    def _wallpaper_from_dict(self, data: dict[str, Any]) -> Wallpaper:
+        """Convert Wallhaven API response to Wallpaper domain model.
 
         Args:
-            preset_name: Name of preset (e.g., 'General Landscape')
-            page: Page number
+            data: Dictionary from Wallhaven API
 
         Returns:
-            Dict with 'data' and 'meta'
+            Wallpaper domain model
         """
-        if preset_name not in self.PRESETS:
-            return {"error": f"Unknown preset: {preset_name}", "data": []}
-
-        preset = self.PRESETS[preset_name]
-        return self.search(
-            q=preset["q"],
-            categories=preset["categories"],
-            purity=preset["purity"],
-            sorting="random",
-            page=page,
+        resolution = Resolution(
+            width=data.get("dimension_x", 0),
+            height=data.get("dimension_y", 0),
         )
 
-    def get_presets(self) -> List[str]:
-        """Get list of available preset names"""
-        return list(self.PRESETS.keys())
+        purity_map = {
+            "sfw": WallpaperPurity.SFW,
+            "sketchy": WallpaperPurity.SKETCHY,
+            "nsfw": WallpaperPurity.NSFW,
+        }
 
-    def download(
-        self, url: str, dest_path: Path, progress_callback: Optional[callable] = None
+        return Wallpaper(
+            id=data["id"],
+            url=data["url"],
+            path=data.get("path", data.get("full_url", "")),
+            resolution=resolution,
+            source=WallpaperSource.WALLHAVEN,
+            category=data.get("category", "general"),
+            purity=purity_map.get(data.get("purity", "sfw"), WallpaperPurity.SFW),
+            colors=data.get("colors", []),
+            file_size=data.get("file_size", 0),
+            thumbs_large=data.get("thumbs", {}).get("large", ""),
+            thumbs_small=data.get("thumbs", {}).get("small", ""),
+        )
+
+    async def download(
+        self,
+        wallpaper: Wallpaper,
+        dest: Path,
+        progress_callback: "Callable[[int, int], None] | None" = None,
     ) -> bool:
-        """
-        Download wallpaper with progress callback
+        """Download wallpaper to destination.
 
         Args:
-            url: Direct download URL
-            dest_path: Destination file path
-            progress_callback: Function called with (bytes_downloaded, total_bytes)
+            wallpaper: Wallpaper domain model to download
+            dest: Destination path
+            progress_callback: Optional callback for progress updates
 
         Returns:
             True if successful, False otherwise
         """
+        await self._rate_limit()
+
+        session = await self._get_session()
+
         try:
-            response = self.session.get(url, stream=True)
-            response.raise_for_status()
-            total_size = int(response.headers.get("content-length", 0))
+            self.log_info(f"Downloading wallpaper {wallpaper.id}")
 
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(dest_path, "wb") as f:
+            async with session.get(wallpaper.path) as response:
+                response.raise_for_status()
+                total_size = int(response.headers.get("content-length", 0))
                 downloaded = 0
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
+
+                with open(dest, "wb") as f:
+                    async for chunk in response.content.iter_chunked(8192):
                         f.write(chunk)
                         downloaded += len(chunk)
+
                         if progress_callback and total_size > 0:
                             progress_callback(downloaded, total_size)
 
+            self.log_debug(f"Downloaded wallpaper to {dest}")
             return True
-        except Exception as e:
-            print(f"Download error: {e}")
+        except (aiohttp.ClientError, OSError) as e:
+            self.log_error(f"Failed to download wallpaper {wallpaper.id}: {e}", exc_info=True)
             return False
+
+    async def close(self) -> None:
+        """Close aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self.log_debug("Closed aiohttp session")
+
+    def __del__(self) -> None:
+        """Cleanup on deletion."""
+        if self._session and not self._session.closed:
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.close())
+            except RuntimeError:
+                pass

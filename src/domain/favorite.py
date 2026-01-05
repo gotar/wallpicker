@@ -5,6 +5,11 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .wallpaper import Wallpaper as _WallpaperImport
+else:
     from .wallpaper import Wallpaper
 
 
@@ -12,7 +17,7 @@ if TYPE_CHECKING:
 class Favorite:
     """Favorite wallpaper domain entity."""
 
-    wallpaper: "Wallpaper"
+    wallpaper: _WallpaperImport if TYPE_CHECKING else Wallpaper
     added_at: datetime
 
     @property

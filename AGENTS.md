@@ -1,79 +1,78 @@
 # WALLPICKER
 
-**Generated:** 2026-01-05
-**Type:** Python GTK4 + Libadwaita Desktop App
+**Refactored:** 2026-01-05
+**Type:** Python GTK4 + Libadwaita Desktop App (MVVM Architecture)
 
 ## OVERVIEW
-Wallpaper picker with multi-source support (Wallhaven API + local files). Async HTTP requests, thumbnail caching, favorites management.
+Wallpaper picker with multi-source support (Wallhaven API + local files). Features a modern MVVM architecture, async operations, dependency injection, and comprehensive testing.
 
 ## STRUCTURE
 ```
 ./
 ├── src/
-│   ├── services/     # All business logic (wallpaper fetching, caching, DB)
-│   └── ui/           # GTK/Libadwaita UI layer
-├── tests/
-└── data/             # Assets (icons)
+│   ├── core/         # Core infrastructure (DI container, logging)
+│   ├── domain/       # Domain entities and value objects
+│   ├── services/     # Business logic services (Async)
+│   └── ui/           # UI Layer (MVVM)
+│       ├── view_models/  # Presentation logic
+│       └── views/        # GTK Widgets
+├── tests/            # Pytest test suite
+└── data/             # Assets
 ```
 
-## WHERE TO LOOK
-| Task | Location |
-|------|----------|
-| Wallpaper API integration | src/services/wallhaven_service.py |
-| Local file browsing | src/services/local_service.py |
-| UI entry point | src/ui/main_window.py |
-| Config management | src/services/config_service.py |
-| Thumbnail caching | src/services/thumbnail_cache.py |
-| Setting wallpapers | src/services/wallpaper_setter.py |
-| Favorites DB | src/services/favorites_service.py |
+## KEY COMPONENTS
 
-## CONVENTIONS (NON-STANDARD)
+| Component | Location | Description |
+|-----------|----------|-------------|
+| **Entry Point** | `src/ui/main_window.py` | Orchestrates DI container and ViewModels |
+| **DI Container** | `src/core/container.py` | Manages service lifecycles and dependencies |
+| **Domain Models** | `src/domain/` | Rich entities (Wallpaper, Config) |
+| **Wallhaven** | `src/services/wallhaven_service.py` | Async API client (aiohttp) |
+| **Local Files** | `src/services/local_service.py` | Local file management |
+| **ViewModels** | `src/ui/view_models/` | Observable state for UI binding |
 
-### Module Loading
-All entry points (`main.py`, `launcher.py`) manually add `src/` to `sys.path`:
-```python
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-```
-No `__init__.py` in `src/` directories.
+## ARCHITECTURE CONVENTIONS
 
-### Installation
-Two paths:
-- `./install.sh` → User-space to `~/.local/`
-- `PKGBUILD` (Arch) → System-wide to `/usr/`
+### MVVM Pattern
+- **Models**: Domain entities (`src/domain`) and Services (`src/services`)
+- **ViewModels**: Expose observable properties (`GObject.Property`) and command methods. No GTK widget references.
+- **Views**: GTK widgets that bind to ViewModels. No business logic.
 
-Both create executable `wallpicker` that calls `launcher.py`.
+### Dependency Injection
+- Services are registered in `ServiceContainer`.
+- Dependencies are injected via constructor.
+- `main_window.py` bootstraps the container.
+
+### Async Operations
+- Network and file I/O use `async`/`await`.
+- UI invokes async methods via `GLib` integration or `asyncio`.
+- No `threading.Thread` for IO-bound tasks (replaced by asyncio).
 
 ### Testing
-Custom `run_tests.py` using `unittest` with extensive mocking (no pytest).
+- **Framework**: `pytest`
+- **Coverage**: >95%
+- **Fixtures**: `tests/conftest.py` handles mock services and async loops.
+- **Structure**: Tests mirror source directory structure.
 
-### Build
-- Dev: `mise run dev` (Python 3.13 from mise.toml)
-- Package: PKGBUILD for Arch Linux
-- Dependencies: Listed in `requirements.txt`
-
-## ANTI-PATTERNS (THIS PROJECT)
-- Do NOT add `__init__.py` to `src/` dirs (intentional flat structure)
-- Do NOT use pytest (unittest + mocks only)
-- Do NOT modify install.sh after cloning (contains hardcoded paths)
-- Do NOT import from src/ without sys.path manipulation in entry points
-
-## CONFIG LOCATIONS
-- Config: `~/.config/wallpicker/config.json`
-- Thumbnails: `~/.cache/wallpicker/thumbnails/` (7-day expiry, 500MB limit)
-
-## DEPENDENCIES
-- requests, Pillow, PyGObject, send2trash, aiohttp, rapidfuzz
-- Python 3.13+
+## CONFIGURATION
+- **Config**: `~/.config/wallpicker/config.json`
+- **Cache**: `~/.cache/wallpicker/` (Thumbnails, Logs)
+- **Wallpaper Setting**: Symlink at `~/.cache/current_wallpaper` + `awww`
 
 ## COMMANDS
 ```bash
-mise run dev          # Dev mode
-./install.sh          # Install to ~/.local/
-python tests/run_tests.py  # Run tests
+# Run Application
+./launcher.sh
+
+# Run Tests
+python -m pytest tests/
+
+# Code Quality
+ruff check .
+black .
+mypy src/
 ```
 
-## NOTES
-- Async/await for HTTP requests (wallhaven_service.py)
-- GTK4 + Libadwaita for UI (modern GNOME styling)
-- All services importable from anywhere (flat src/ structure)
-- Wallpaper transitions via `awww` command
+## DEPENDENCIES
+- **Runtime**: `PyGObject`, `aiohttp`, `requests`, `Pillow`, `rapidfuzz`, `send2trash`
+- **Dev**: `pytest`, `pytest-asyncio`, `pytest-cov`, `ruff`, `black`, `mypy`

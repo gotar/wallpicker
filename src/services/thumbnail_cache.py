@@ -1,30 +1,34 @@
-"""
-Thumbnail Cache Service
-Handles disk-based caching of thumbnail images for faster loading
-"""
+"""Thumbnail Cache Service using async patterns."""
 
 import hashlib
-import os
 import time
 from pathlib import Path
-from typing import Optional
-from gi.repository import Gdk, GLib
-import requests
+
+import aiohttp
+
+from domain.exceptions import ServiceError
+from services.base import BaseService
 
 
-class ThumbnailCache:
-    """Service for caching thumbnail images to disk"""
+class ThumbnailCache(BaseService):
+    """Async service for caching thumbnail images to disk."""
 
     CACHE_DIR = Path.home() / ".cache" / "wallpicker" / "thumbnails"
     CACHE_EXPIRY_DAYS = 7  # Cache expires after 7 days
     MAX_CACHE_SIZE_MB = 500  # Maximum cache size in MB
 
-    def __init__(self):
-        self.cache_dir = self.CACHE_DIR
+    def __init__(self, cache_dir: Path | None = None) -> None:
+        """Initialize thumbnail cache.
+
+        Args:
+            cache_dir: Custom cache directory (defaults to ~/.cache/wallpicker/thumbnails)
+        """
+        super().__init__()
+        self.cache_dir = cache_dir or self.CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_cache_path(self, url: str) -> Path:
-        """Generate cache file path from URL using hash"""
+        """Generate cache file path from URL using hash."""
         url_hash = hashlib.md5(url.encode()).hexdigest()
         ext = url.split(".")[-1].split("?")[0][:4]  # Get extension, max 4 chars
         if len(ext) > 4 or not ext.isalpha():
@@ -32,141 +36,117 @@ class ThumbnailCache:
         return self.cache_dir / f"{url_hash}.{ext}"
 
     def _is_expired(self, cache_path: Path) -> bool:
-        """Check if cache entry has expired"""
+        """Check if cache entry has expired."""
         if not cache_path.exists():
             return True
         file_age = time.time() - cache_path.stat().st_mtime
         return file_age > (self.CACHE_EXPIRY_DAYS * 24 * 60 * 60)
 
-    def _cleanup_old_cache(self):
-        """Clean up expired cache entries if cache is too large"""
+    def cleanup(self) -> int:
+        """Clean up old cache entries if cache is too large.
+
+        Returns:
+            Number of files removed
+        """
+        removed_count = 0
         total_size = sum(f.stat().st_size for f in self.cache_dir.glob("*"))
         max_size_bytes = self.MAX_CACHE_SIZE_MB * 1024 * 1024
 
+        # Remove expired files
         if total_size > max_size_bytes:
-            for cache_file in self.cache_dir.glob("*"):
+            for cache_file in list(self.cache_dir.glob("*")):
                 if self._is_expired(cache_file):
-                    cache_file.unlink()
+                    try:
+                        cache_file.unlink()
+                        removed_count += 1
+                    except OSError:
+                        self.log_warning(
+                            f"Failed to delete expired cache: {cache_file}"
+                        )
 
-            files = list(self.cache_dir.glob("*"))
-            files.sort(key=lambda f: f.stat().st_mtime)
+        # Remove oldest files if still over limit
+        files = sorted(self.cache_dir.glob("*"), key=lambda f: f.stat().st_mtime)
+        total_size = sum(f.stat().st_size for f in files)
 
-            while total_size > max_size_bytes * 0.9 and files:
-                oldest = files.pop(0)
-                total_size -= oldest.stat().st_size
+        while total_size > max_size_bytes * 0.9 and files:
+            oldest = files.pop(0)
+            total_size -= oldest.stat().st_size
+            try:
                 oldest.unlink()
+                removed_count += 1
+            except OSError:
+                self.log_warning(f"Failed to delete old cache: {oldest}")
 
-    def get_cached_thumbnail(self, url: str) -> Optional[bytes]:
-        """
-        Get thumbnail from cache if available and not expired
+        if removed_count > 0:
+            self.log_info(f"Cleaned up {removed_count} cache files")
+
+        return removed_count
+
+    def get_thumbnail(self, url: str) -> Path | None:
+        """Get cached thumbnail path if available and not expired.
 
         Args:
             url: Thumbnail URL
 
         Returns:
-            Image bytes if cached and valid, None otherwise
+            Path to cached file or None if not cached/expired
         """
         cache_path = self._get_cache_path(url)
 
         if self._is_expired(cache_path):
             return None
 
-        try:
-            with open(cache_path, "rb") as f:
-                return f.read()
-        except Exception:
-            return None
+        self.log_debug(f"Cache hit: {url[:50]}...")
+        return cache_path
 
-    def cache_thumbnail(self, url: str, image_data: bytes) -> bool:
-        """
-        Save thumbnail image to cache
+    async def download_and_cache(
+        self, url: str, session: aiohttp.ClientSession
+    ) -> Path:
+        """Download thumbnail from URL and cache it.
 
         Args:
-            url: Thumbnail URL (used as key)
-            image_data: Raw image data to cache
+            url: Thumbnail URL to download
+            session: aiohttp session for async download
 
         Returns:
-            True if cached successfully, False otherwise
-        """
-        try:
-            self._cleanup_old_cache()
+            Path to cached file
 
-            cache_path = self._get_cache_path(url)
+        Raises:
+            ServiceError: If download fails
+        """
+        cache_path = self._get_cache_path(url)
+
+        try:
+            self.cleanup()
+            self.log_info(f"Downloading thumbnail: {url[:50]}...")
+
+            async with session.get(url) as response:
+                response.raise_for_status()
+                image_data = await response.read()
+
             with open(cache_path, "wb") as f:
                 f.write(image_data)
-            return True
-        except Exception:
-            return False
 
-    def load_thumbnail_with_cache(
-        self, url: str, image_widget, fallback_download: bool = True
-    ) -> bool:
-        """
-        Load thumbnail into widget, using cache if available
+            self.log_debug(f"Cached thumbnail: {cache_path.name}")
+            return cache_path
+        except (aiohttp.ClientError, OSError) as e:
+            self.log_error(
+                f"Failed to download thumbnail from {url}: {e}", exc_info=True
+            )
+            raise ServiceError(f"Failed to download thumbnail: {e}") from e
+
+    async def get_or_download(self, url: str, session: aiohttp.ClientSession) -> Path:
+        """Get thumbnail from cache or download if not available.
 
         Args:
             url: Thumbnail URL
-            image_widget: Gtk.Picture widget to load image into
-            fallback_download: If True, download if not in cache
+            session: aiohttp session for async download
 
         Returns:
-            True if loaded from cache, False if download initiated or failed
+            Path to cached file
         """
-        cached_data = self.get_cached_thumbnail(url)
-        if cached_data:
-            try:
-                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(cached_data))
-                image_widget.set_paintable(texture)
-                return True
-            except Exception:
-                pass
+        cached = self.get_thumbnail(url)
+        if cached:
+            return cached
 
-        if fallback_download:
-
-            def do_load():
-                try:
-                    response = requests.get(url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.content
-                        self.cache_thumbnail(url, data)
-                        GLib.idle_add(set_image, data)
-                except Exception:
-                    pass
-
-            def set_image(data):
-                try:
-                    texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
-                    image_widget.set_paintable(texture)
-                except Exception:
-                    pass
-
-            import threading
-
-            threading.Thread(target=do_load, daemon=True).start()
-
-        return False
-
-    def clear_cache(self):
-        """Clear all cached thumbnails"""
-        for cache_file in self.cache_dir.glob("*"):
-            try:
-                cache_file.unlink()
-            except Exception:
-                pass
-
-    def get_cache_info(self) -> dict:
-        """
-        Get information about cache status
-
-        Returns:
-            Dict with 'count', 'size_mb', 'expired_count'
-        """
-        files = list(self.cache_dir.glob("*"))
-        total_size = sum(f.stat().st_size for f in files)
-        expired_count = sum(1 for f in files if self._is_expired(f))
-
-        return {
-            "count": len(files),
-            "size_mb": total_size / (1024 * 1024),
-            "expired_count": expired_count,
-        }
+        return await self.download_and_cache(url, session)

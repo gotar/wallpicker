@@ -1,0 +1,55 @@
+.wallpaper-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s;
+}
+
+.wallpaper-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.wallpaper-thumb {
+    object-fit: fill;
+    max-width: 180px;
+    max-height: 180px;
+}
+
+.action-button {
+    min-width: 80px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.1);
+    color: white;
+    transition: background 0.15s;
+}
+
+.action-button:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.destructive-action {
+    background: #e51a4a;
+}
+
+.destructive-action:hover {
+    background: #c0392b;
+}
+
+.error {
+    color: #e51a4a;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(249, 46, 46, 0.1);
+}
+
+.filter-bar {
+    padding: 12px;
+}
+
+.status-bar {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+}

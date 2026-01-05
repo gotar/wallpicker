@@ -3,12 +3,11 @@ Local Wallpaper Service
 Handles browsing, searching, and deleting local wallpapers
 """
 
-import os
 from pathlib import Path
-from typing import List, Optional
-from send2trash import send2trash
+
 from gi.repository import GObject
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz, process
+from send2trash import send2trash
 
 
 class LocalWallpaper(GObject.Object):
@@ -27,12 +26,12 @@ class LocalWallpaperService:
 
     SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
-    def __init__(self, pictures_dir: Optional[Path] = None):
+    def __init__(self, pictures_dir: Path | None = None):
         self.pictures_dir = pictures_dir or Path.home() / "Pictures"
         if not self.pictures_dir.exists():
             self.pictures_dir = Path.home() / "Pictures"
 
-    def get_wallpapers(self, recursive: bool = True) -> List[LocalWallpaper]:
+    def get_wallpapers(self, recursive: bool = True) -> list[LocalWallpaper]:
         """
         Get list of wallpapers from Pictures directory
 
@@ -51,10 +50,7 @@ class LocalWallpaperService:
                 pattern = "*"
 
             for file_path in self.pictures_dir.glob(pattern):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
-                ):
+                if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
                     stat = file_path.stat()
                     wallpapers.append(
                         LocalWallpaper(
@@ -96,8 +92,8 @@ class LocalWallpaperService:
         return self.pictures_dir
 
     def search_wallpapers(
-        self, query: str, wallpapers: Optional[List[LocalWallpaper]] = None
-    ) -> List[LocalWallpaper]:
+        self, query: str, wallpapers: list[LocalWallpaper] | None = None
+    ) -> list[LocalWallpaper]:
         """
         Search wallpapers using fuzzy matching
 
@@ -122,7 +118,7 @@ class LocalWallpaperService:
         )
 
         scored_wallpapers = []
-        for filename, score, index in results:
+        for _filename, score, index in results:
             if score >= 50:
                 scored_wallpapers.append((wallpapers_list[index], score))
 

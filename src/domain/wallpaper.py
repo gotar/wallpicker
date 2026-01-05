@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List
 
 
 class WallpaperSource(Enum):
@@ -53,7 +52,7 @@ class Wallpaper:
     source: WallpaperSource
     category: str
     purity: WallpaperPurity
-    colors: List[str] = field(default_factory=list)
+    colors: list[str] = field(default_factory=list)
     file_size: int = 0
     thumbs_large: str = ""
     thumbs_small: str = ""

@@ -1,10 +1,9 @@
 """Base service class with common functionality."""
 
-from abc import ABC
-from logging import getLogger, Logger
+from logging import Logger, getLogger
 
 
-class BaseService(ABC):
+class BaseService:
     """Base class for all services with logging support."""
 
     def __init__(self) -> None:
