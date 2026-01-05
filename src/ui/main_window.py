@@ -42,7 +42,6 @@ class MainWindow(Adw.Application):
         if not self.window:
             self.config_service = ConfigService()
             config = self.config_service.get_config()
-            pictures_dir = config.pictures_dir
 
             self.wallpaper_setter = WallpaperSetter()
             local_service = LocalWallpaperService(pictures_dir=pictures_dir)
@@ -73,7 +72,6 @@ class MainWindow(Adw.Application):
             wallhaven_view_model=self.wallhaven_view_model,
         )
         self.window.present()
-        print("DEBUG: Window presented")
 
 
 class WallPickerWindow(Adw.ApplicationWindow):
