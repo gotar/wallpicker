@@ -58,14 +58,14 @@ class MainWindow(Adw.Application):
             self.wallhaven_view_model = WallhavenViewModel(
                 wallhaven_service=wallhaven_service,
                 thumbnail_cache=thumbnail_cache,
-                favorites_service=favorites_service,
             )
+            self.wallhaven_view_model.favorites_service = favorites_service
             self.local_view_model = LocalViewModel(
                 local_service=local_service,
                 wallpaper_setter=self.wallpaper_setter,
                 pictures_dir=pictures_dir,
-                favorites_service=favorites_service,
             )
+            self.local_view_model.favorites_service = favorites_service
             self.favorites_view_model = FavoritesViewModel(
                 favorites_service=favorites_service,
                 wallpaper_setter=self.wallpaper_setter,

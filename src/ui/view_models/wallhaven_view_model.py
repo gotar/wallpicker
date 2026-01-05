@@ -24,12 +24,11 @@ class WallhavenViewModel(BaseViewModel):
         self,
         wallhaven_service: WallhavenService,
         thumbnail_cache: ThumbnailCache,
-        favorites_service: "FavoritesService" | None = None,
     ) -> None:
         super().__init__()
         self.wallhaven_service = wallhaven_service
         self.thumbnail_cache = thumbnail_cache
-        self.favorites_service = favorites_service
+        self.favorites_service: FavoritesService | None = None
 
         self._wallpapers: list[Wallpaper] = []
         self._current_page = 1

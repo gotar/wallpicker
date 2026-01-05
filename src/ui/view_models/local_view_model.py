@@ -31,13 +31,12 @@ class LocalViewModel(BaseViewModel):
         local_service: LocalWallpaperService,
         wallpaper_setter: WallpaperSetter,
         pictures_dir: Path | None = None,
-        favorites_service: FavoritesService | None = None,
     ) -> None:
         super().__init__()
         self.local_service = local_service
         self.wallpaper_setter = wallpaper_setter
         self.pictures_dir = pictures_dir
-        self.favorites_service = favorites_service
+        self.favorites_service: FavoritesService | None = None
 
         self._wallpapers: list[LocalWallpaper] = []
         self.search_query = ""
