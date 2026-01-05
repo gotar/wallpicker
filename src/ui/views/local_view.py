@@ -127,7 +127,6 @@ class LocalView(Gtk.Box):
             self.wallpaper_grid.append(card)
 
     def _create_wallpaper_card(self, wallpaper):
-        """Create wallpaper card with image and actions"""
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.set_hexpand(True)
         card.set_size_request(220, 200)
@@ -147,6 +146,11 @@ class LocalView(Gtk.Box):
         overlay = Gtk.Overlay()
         overlay.set_child(image)
         card.append(overlay)
+
+        click = Gtk.GestureClick()
+        click.set_button(1)
+        click.connect("pressed", self._on_card_double_clicked, wallpaper)
+        card.add_controller(click)
 
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         actions_box.set_halign(Gtk.Align.CENTER)
@@ -171,16 +175,22 @@ class LocalView(Gtk.Box):
         return card
 
     def _on_set_wallpaper(self, button, wallpaper):
-        """Handle set wallpaper button click"""
-        # Run synchronously since WallpaperSetter.set_wallpaper is sync
         result = self.view_model.wallpaper_setter.set_wallpaper(str(wallpaper.path))
         if not result:
             print(f"Failed to set wallpaper: {wallpaper.path}")
 
-    def _on_add_to_favorites(self, button, wallpaper):
-        """Handle add to favorites button click"""
-        # TODO: Connect to FavoritesService when available
-        print(f"Added to favorites: {wallpaper.filename}")
+    def _on_card_double_clicked(self, gesture, n_press, x, y, wallpaper):
+        self._on_set_wallpaper(None, wallpaper)
+
+    async def _on_add_to_favorites(self, button, wallpaper):
+        import threading
+
+        def add_fav():
+            import asyncio
+
+            asyncio.run(self.view_model.add_to_favorites(wallpaper))
+
+        threading.Thread(target=add_fav, daemon=True).start()
 
     def _on_delete_wallpaper(self, button, wallpaper):
         """Handle delete button click"""

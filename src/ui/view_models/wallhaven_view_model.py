@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from gi.repository import GObject
 
 from domain.wallpaper import Wallpaper
+from services.favorites_service import FavoritesService
 from services.thumbnail_cache import ThumbnailCache
 from services.wallhaven_service import WallhavenService
 from ui.view_models.base import BaseViewModel
@@ -23,12 +24,13 @@ class WallhavenViewModel(BaseViewModel):
         self,
         wallhaven_service: WallhavenService,
         thumbnail_cache: ThumbnailCache,
+        favorites_service: "FavoritesService" | None = None,
     ) -> None:
         super().__init__()
         self.wallhaven_service = wallhaven_service
         self.thumbnail_cache = thumbnail_cache
+        self.favorites_service = favorites_service
 
-        # Observable state
         self._wallpapers: list[Wallpaper] = []
         self._current_page = 1
         self._total_pages = 1
@@ -199,3 +201,22 @@ class WallhavenViewModel(BaseViewModel):
     def can_navigate(self) -> bool:
         """Check if pagination navigation is available"""
         return self.has_next_page() or self.has_prev_page()
+
+    async def add_to_favorites(self, wallpaper: Wallpaper) -> bool:
+        if not self.favorites_service:
+            self.error_message = "Favorites service not available"
+            return False
+
+        try:
+            self.is_busy = True
+            self.error_message = None
+
+            self.favorites_service.add_favorite(wallpaper)
+
+            return True
+
+        except Exception as e:
+            self.error_message = f"Failed to add to favorites: {e}"
+            return False
+        finally:
+            self.is_busy = False
