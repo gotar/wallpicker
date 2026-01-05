@@ -66,7 +66,7 @@ class FavoritesViewModel(BaseViewModel):
                 # Load all favorites if query is empty
                 self.load_favorites()
             else:
-                results = self.favorites_service.search_wallpapers(query)
+                results = self.favorites_service.search_favorites(query)
                 self.favorites = results
 
         except Exception as e:
@@ -89,34 +89,36 @@ class FavoritesViewModel(BaseViewModel):
             self.error_message = None
 
             # Create wallpaper object for service
-            from domain.wallpaper import Wallpaper
+            from domain.wallpaper import Wallpaper, WallpaperSource, Resolution
+
+            # Convert source string to enum if needed
+            source_enum = source
+            if isinstance(source, str):
+                if source == "local":
+                    source_enum = WallpaperSource.LOCAL
+                elif source == "wallhaven":
+                    source_enum = WallpaperSource.WALLHAVEN
+                elif source == "favorite":
+                    source_enum = WallpaperSource.FAVORITE
+                else:
+                    source_enum = WallpaperSource.LOCAL
 
             wallpaper = Wallpaper(
                 id=wallpaper_id,
                 url=full_url,
-                short_url=full_url,
-                thumbs=None,
                 path=path,
+                resolution=Resolution(width=1920, height=1080),
                 purity="sfw",
                 category="general",
-                resolution=None,
-                colors=None,
-                tags=tags.split(",") if tags else [],
-                file_size=0,
-                file_type=0,
-                created_at=None,
-                views=0,
-                favorites=0,
-                source=source,
+                source=source_enum,
             )
 
-            favorite = self.favorites_service.add_favorite(wallpaper)
+            self.favorites_service.add_favorite(wallpaper)
 
-            # Add to list if addition succeeded
-            if favorite:
-                self.favorites.append(favorite)
+            # Reload favorites to get updated list
+            self.load_favorites()
 
-            return favorite is not None
+            return True
 
         except Exception as e:
             self.error_message = f"Failed to add favorite: {e}"
@@ -151,7 +153,10 @@ class FavoritesViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            result = self.wallpaper_setter.set_wallpaper(favorite.path)
+            result = self.wallpaper_setter.set_wallpaper(favorite.wallpaper.path)
+
+            if not result:
+                self.error_message = "Failed to set wallpaper"
 
             return result
 

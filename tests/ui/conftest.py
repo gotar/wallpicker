@@ -74,9 +74,17 @@ def mock_favorites_service(tmp_path):
         favorites.append(Favorite(wallpaper=wallpaper, added_at=datetime.now()))
 
     mock.get_favorites.return_value = favorites
-    mock.search_wallpapers.return_value = favorites[:1]
-    mock.add_favorite.return_value = favorites[0]
-    mock.remove_favorite.return_value = True
+    mock.search_favorites.return_value = favorites[:1]
+
+    # Track state for add/remove operations
+    def track_add(wallpaper):
+        return True
+
+    def track_remove(wallpaper_id):
+        return True
+
+    mock.add_favorite.side_effect = track_add
+    mock.remove_favorite.side_effect = track_remove
     mock.is_favorite.return_value = False
 
     return mock
@@ -119,7 +127,7 @@ def mock_thumbnail_cache():
 
     mock = MagicMock(spec=ThumbnailCache)
     mock.get_thumbnail.return_value = None
-    mock.save_thumbnail.return_value = True
+    mock.cleanup.return_value = 0
 
     return mock
 

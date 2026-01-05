@@ -30,9 +30,7 @@ class TestFavoritesViewModelLoadFavorites:
         assert len(favorites_view_model.favorites) == 2
         assert favorites_view_model.is_busy is False
 
-    def test_load_favorites_error_handling(
-        self, favorites_view_model, mock_favorites_service
-    ):
+    def test_load_favorites_error_handling(self, favorites_view_model, mock_favorites_service):
         """Test error handling during load."""
         mock_favorites_service.get_favorites.side_effect = Exception("Test error")
 
@@ -46,28 +44,21 @@ class TestFavoritesViewModelLoadFavorites:
 class TestFavoritesViewModelSearchFavorites:
     """Test search_favorites method."""
 
-    def test_search_empty_query_loads_all(
-        self, favorites_view_model, mock_favorites_service
-    ):
+    def test_search_empty_query_loads_all(self, favorites_view_model, mock_favorites_service):
         """Test that empty search loads all favorites."""
         favorites_view_model.search_favorites("")
 
         mock_favorites_service.get_favorites.assert_called()
 
     def test_search_with_query(self, favorites_view_model, mock_favorites_service):
-        """Test search with actual query."""
         favorites_view_model.search_favorites("test")
 
-        mock_favorites_service.search_wallpapers.assert_called_once_with("test")
+        mock_favorites_service.search_favorites.assert_called_once_with("test")
         assert favorites_view_model.search_query == "test"
 
-    def test_search_updates_favorites(
-        self, favorites_view_model, mock_favorites_service
-    ):
-        """Test that search results update favorites list."""
+    def test_search_updates_favorites(self, favorites_view_model, mock_favorites_service):
         favorites_view_model.search_favorites("test")
 
-        # Should have filtered results
         assert len(favorites_view_model.favorites) == 1
 
 
@@ -75,7 +66,6 @@ class TestFavoritesViewModelAddFavorite:
     """Test add_favorite method."""
 
     def test_add_favorite_success(self, favorites_view_model, mock_favorites_service):
-        """Test successful favorite addition."""
         result = favorites_view_model.add_favorite(
             wallpaper_id="new_id",
             full_url="https://example.com/new.jpg",
@@ -88,8 +78,7 @@ class TestFavoritesViewModelAddFavorite:
         mock_favorites_service.add_favorite.assert_called_once()
 
     def test_add_favorite_failure(self, favorites_view_model, mock_favorites_service):
-        """Test failed favorite addition."""
-        mock_favorites_service.add_favorite.return_value = None
+        mock_favorites_service.add_favorite.side_effect = Exception("Test error")
 
         result = favorites_view_model.add_favorite(
             wallpaper_id="new_id",
@@ -100,14 +89,13 @@ class TestFavoritesViewModelAddFavorite:
         )
 
         assert result is False
+        assert "Failed to add favorite" in favorites_view_model.error_message
 
 
 class TestFavoritesViewModelRemoveFavorite:
     """Test remove_favorite method."""
 
-    def test_remove_favorite_success(
-        self, favorites_view_model, mock_favorites_service
-    ):
+    def test_remove_favorite_success(self, favorites_view_model, mock_favorites_service):
         """Test successful favorite removal."""
         favorites_view_model.load_favorites()
         favorite = favorites_view_model.favorites[0]
@@ -160,9 +148,7 @@ class TestFavoritesViewModelRefresh:
 
         assert favorites_view_model.search_query == ""
 
-    def test_refresh_reloads_favorites(
-        self, favorites_view_model, mock_favorites_service
-    ):
+    def test_refresh_reloads_favorites(self, favorites_view_model, mock_favorites_service):
         """Test that refresh reloads favorites."""
         favorites_view_model.refresh_favorites()
 
