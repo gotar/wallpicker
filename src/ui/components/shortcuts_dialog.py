@@ -176,11 +176,6 @@ class ShortcutsDialog(Adw.Dialog):
             row.set_title(tip)
             row.set_activatable(False)
 
-            # Style as subtitle (secondary text)
-            label = row.get_title_label()
-            if label:
-                label.add_css_class("dim-label")
-
             group.add(row)
 
         return group
