@@ -126,13 +126,13 @@ class WallhavenViewModel(BaseViewModel):
         self._resolution = value
 
     async def load_initial_wallpapers(self) -> None:
-        """Load initial wallpapers with default parameters"""
+        """Load initial wallpapers with current parameters"""
         await self.search_wallpapers(
-            query="",
+            query=self.search_query,
             page=1,
-            category="111",
+            category=self.category,
             purity="100",
-            sorting="toplist",
+            sorting=self.sorting,
             order="desc",
             resolution="",
         )

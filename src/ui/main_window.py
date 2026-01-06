@@ -198,13 +198,15 @@ class WallPickerWindow(Adw.ApplicationWindow):
         if visible_child == self.favorites_view:
             self.favorites_view_model.load_favorites()
         elif visible_child == self.wallhaven_view:
+            # Only load Wallhaven wallpapers if not already loaded
+            if not self.wallhaven_view_model.wallpapers:
 
-            def load_wallhaven():
-                import asyncio
+                def load_wallhaven():
+                    import asyncio
 
-                asyncio.run(self.wallhaven_view_model.load_initial_wallpapers())
+                    asyncio.run(self.wallhaven_view_model.load_initial_wallpapers())
 
-            self.wallhaven_view_model._executor.submit(load_wallhaven)
+                self.wallhaven_view_model._executor.submit(load_wallhaven)
 
     def _on_refresh_clicked(self, button):
         """Handle refresh button click."""

@@ -398,8 +398,12 @@ class WallhavenView(Adw.Bin):
         self._run_async(
             self.view_model.search_wallpapers(
                 query=query,
+                page=1,
                 category=category,
+                purity="100",
                 sorting=sorting,
+                order="desc",
+                resolution="",
             )
         )
 
@@ -411,14 +415,6 @@ class WallhavenView(Adw.Bin):
 
     def _on_wallpapers_changed(self, obj, pspec):
         self.update_wallpaper_grid(self.view_model.wallpapers)
-
-    def update_wallpaper_grid(self, wallpapers):
-        while child := self.wallpaper_grid.get_first_child():
-            self.wallpaper_grid.remove(child)
-
-        for wallpaper in wallpapers:
-            card = self._create_wallpaper_card(wallpaper)
-            self.wallpaper_grid.append(card)
 
     def _on_page_changed(self, obj, pspec):
         """Handle page property change"""
