@@ -69,8 +69,31 @@ class WallhavenService(BaseService):
         order: str = "desc",
         atleast: str = "",
         page: int = 1,
+        top_range: str = "",
+        ratios: str = "",
+        colors: str = "",
+        resolutions: str = "",
+        seed: str = "",
     ) -> tuple[list[Wallpaper], dict]:
-        """Search wallpapers with given parameters"""
+        """Search wallpapers with given parameters.
+
+        Args:
+            query: Search query with tag support (e.g., "nature", "+mountains -anime")
+            categories: 3-digit binary string [general][anime][people] (e.g., "111" = all)
+            purity: 3-digit binary string [sfw][sketchy][nsfw] (e.g., "100" = SFW only)
+            sorting: Sort method (date_added, relevance, random, views, favorites, toplist, hot)
+            order: Sort order (asc, desc)
+            atleast: Minimum resolution (e.g., "1920x1080")
+            page: Page number (1-indexed)
+            top_range: Time range for toplist sorting (1d, 3d, 1w, 1M, 3M, 6M, 1y)
+            ratios: Aspect ratios comma-separated (e.g., "16x9,16x10,21x9")
+            colors: Hex color code (e.g., "0066cc" for blue)
+            resolutions: Exact resolutions comma-separated (e.g., "1920x1080,2560x1440")
+            seed: Random seed for consistent random results (6 alphanumeric chars)
+
+        Returns:
+            Tuple of (wallpapers list, metadata dict)
+        """
         await self._rate_limit()
 
         params = {
@@ -82,6 +105,17 @@ class WallhavenService(BaseService):
             "atleast": atleast,
             "page": page,
         }
+
+        if top_range:
+            params["topRange"] = top_range
+        if ratios:
+            params["ratios"] = ratios
+        if colors:
+            params["colors"] = colors
+        if resolutions:
+            params["resolutions"] = resolutions
+        if seed:
+            params["seed"] = seed
 
         try:
             session = await self._get_session()

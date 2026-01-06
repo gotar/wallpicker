@@ -43,10 +43,14 @@ class WallhavenViewModel(BaseViewModel):
         self._sorting = "toplist"
         self._order = "desc"
         self._resolution = ""
+        self._top_range = ""
+        self._ratios = ""
+        self._colors = ""
+        self._resolutions = ""
+        self._seed = ""
 
     @GObject.Property(type=object)
     def wallpapers(self) -> list[Wallpaper]:
-        """Wallpapers list property"""
         return self._wallpapers
 
     @wallpapers.setter
@@ -55,7 +59,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=int, default=1)
     def current_page(self) -> int:
-        """Current page property"""
         return self._current_page
 
     @current_page.setter
@@ -64,7 +67,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=int, default=1)
     def total_pages(self) -> int:
-        """Total pages property"""
         return self._total_pages
 
     @total_pages.setter
@@ -73,7 +75,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="")
     def search_query(self) -> str:
-        """Search query property"""
         return self._search_query
 
     @search_query.setter
@@ -82,7 +83,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="111")
     def category(self) -> str:
-        """Category property"""
         return self._category
 
     @category.setter
@@ -91,7 +91,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="100")
     def purity(self) -> str:
-        """Purity property"""
         return self._purity
 
     @purity.setter
@@ -100,7 +99,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="toplist")
     def sorting(self) -> str:
-        """Sorting property"""
         return self._sorting
 
     @sorting.setter
@@ -109,7 +107,6 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="desc")
     def order(self) -> str:
-        """Order property"""
         return self._order
 
     @order.setter
@@ -118,12 +115,51 @@ class WallhavenViewModel(BaseViewModel):
 
     @GObject.Property(type=str, default="")
     def resolution(self) -> str:
-        """Resolution property"""
         return self._resolution
 
     @resolution.setter
     def resolution(self, value: str) -> None:
         self._resolution = value
+
+    @GObject.Property(type=str, default="")
+    def top_range(self) -> str:
+        return self._top_range
+
+    @top_range.setter
+    def top_range(self, value: str) -> None:
+        self._top_range = value
+
+    @GObject.Property(type=str, default="")
+    def ratios(self) -> str:
+        return self._ratios
+
+    @ratios.setter
+    def ratios(self, value: str) -> None:
+        self._ratios = value
+
+    @GObject.Property(type=str, default="")
+    def colors(self) -> str:
+        return self._colors
+
+    @colors.setter
+    def colors(self, value: str) -> None:
+        self._colors = value
+
+    @GObject.Property(type=str, default="")
+    def resolutions(self) -> str:
+        return self._resolutions
+
+    @resolutions.setter
+    def resolutions(self, value: str) -> None:
+        self._resolutions = value
+
+    @GObject.Property(type=str, default="")
+    def seed(self) -> str:
+        return self._seed
+
+    @seed.setter
+    def seed(self, value: str) -> None:
+        self._seed = value
 
     async def load_initial_wallpapers(self) -> None:
         """Load initial wallpapers with current parameters"""
@@ -135,6 +171,11 @@ class WallhavenViewModel(BaseViewModel):
             sorting=self.sorting,
             order="desc",
             resolution="",
+            top_range=self.top_range,
+            ratios=self.ratios,
+            colors=self.colors,
+            resolutions=self.resolutions,
+            seed=self.seed,
         )
 
     async def search_wallpapers(
@@ -146,6 +187,11 @@ class WallhavenViewModel(BaseViewModel):
         sorting: str = "toplist",
         order: str = "desc",
         resolution: str = "",
+        top_range: str = "",
+        ratios: str = "",
+        colors: str = "",
+        resolutions: str = "",
+        seed: str = "",
     ) -> None:
         """Search wallpapers on Wallhaven"""
         try:
@@ -157,6 +203,11 @@ class WallhavenViewModel(BaseViewModel):
             self.sorting = sorting
             self.order = order
             self.resolution = resolution
+            self.top_range = top_range
+            self.ratios = ratios
+            self.colors = colors
+            self.resolutions = resolutions
+            self.seed = seed
 
             wallpapers, meta = await self.wallhaven_service.search(
                 query=query,
@@ -166,6 +217,11 @@ class WallhavenViewModel(BaseViewModel):
                 sorting=sorting,
                 order=order,
                 atleast=resolution,
+                top_range=top_range,
+                ratios=ratios,
+                colors=colors,
+                resolutions=resolutions,
+                seed=seed,
             )
 
             self.wallpapers = wallpapers
@@ -189,6 +245,11 @@ class WallhavenViewModel(BaseViewModel):
                 sorting=self.sorting,
                 order=self.order,
                 resolution=self.resolution,
+                top_range=self.top_range,
+                ratios=self.ratios,
+                colors=self.colors,
+                resolutions=self.resolutions,
+                seed=self.seed,
             )
 
     async def load_prev_page(self) -> None:
@@ -203,6 +264,11 @@ class WallhavenViewModel(BaseViewModel):
                 sorting=self.sorting,
                 order=self.order,
                 resolution=self.resolution,
+                top_range=self.top_range,
+                ratios=self.ratios,
+                colors=self.colors,
+                resolutions=self.resolutions,
+                seed=self.seed,
             )
 
     def has_next_page(self) -> bool:

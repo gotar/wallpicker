@@ -385,9 +385,15 @@ class WallhavenView(Adw.Bin):
         category = self._get_category()
         sorting = self._get_sorting()
         query = self.search_entry.get_text()
+        advanced = self.search_filter_bar.get_advanced_filters()
 
         self.view_model.category = category
         self.view_model.sorting = sorting
+
+        self.view_model.top_range = advanced.get("top_range", "")
+        self.view_model.ratios = advanced.get("ratios", "")
+        self.view_model.colors = advanced.get("colors", "")
+        self.view_model.resolutions = advanced.get("resolutions", "")
 
         self._run_async(
             self.view_model.search_wallpapers(
@@ -398,6 +404,10 @@ class WallhavenView(Adw.Bin):
                 sorting=sorting,
                 order="desc",
                 resolution="",
+                top_range=self.view_model.top_range,
+                ratios=self.view_model.ratios,
+                colors=self.view_model.colors,
+                resolutions=self.view_model.resolutions,
             )
         )
 

@@ -182,7 +182,7 @@ class SearchFilterBar(Gtk.Box):
         content_box.append(purity_box)
 
         # Resolution section (all tabs)
-        resolution_label = Gtk.Label(label="Resolution")
+        resolution_label = Gtk.Label(label="Minimum Resolution")
         resolution_label.add_css_class("heading")
         resolution_label.set_halign(Gtk.Align.START)
         content_box.append(resolution_label)
@@ -195,6 +195,68 @@ class SearchFilterBar(Gtk.Box):
         resolution_list.append("3840x2160 (4K)")
         self.resolution_dropdown.set_model(resolution_list)
         content_box.append(self.resolution_dropdown)
+
+        if self.tab_type == "wallhaven":
+            top_range_label = Gtk.Label(label="Top Range")
+            top_range_label.add_css_class("heading")
+            top_range_label.set_halign(Gtk.Align.START)
+            content_box.append(top_range_label)
+
+            top_range_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            self.top_range_combo = Gtk.DropDown()
+
+            top_range_list = Gtk.StringList()
+            top_range_list.append("Default")
+            top_range_list.append("1 Day")
+            top_range_list.append("3 Days")
+            top_range_list.append("1 Week")
+            top_range_list.append("1 Month")
+            top_range_list.append("3 Months")
+            top_range_list.append("6 Months")
+            top_range_list.append("1 Year")
+
+            self.top_range_combo.set_model(top_range_list)
+            top_range_box.append(self.top_range_combo)
+            content_box.append(top_range_box)
+
+            aspect_label = Gtk.Label(label="Aspect Ratio")
+            aspect_label.add_css_class("heading")
+            aspect_label.set_halign(Gtk.Align.START)
+            content_box.append(aspect_label)
+
+            self.aspect_combo = Gtk.DropDown()
+
+            aspect_list = Gtk.StringList()
+            aspect_list.append("All")
+            aspect_list.append("16:9 (Standard)")
+            aspect_list.append("16:10 (Wide)")
+            aspect_list.append("21:9 (Ultrawide)")
+            aspect_list.append("9:16 (Portrait)")
+            aspect_list.append("1:1 (Square)")
+
+            self.aspect_combo.set_model(aspect_list)
+            content_box.append(self.aspect_combo)
+
+            color_label = Gtk.Label(label="Color")
+            color_label.add_css_class("heading")
+            color_label.set_halign(Gtk.Align.START)
+            content_box.append(color_label)
+
+            self.color_combo = Gtk.DropDown()
+
+            color_list = Gtk.StringList()
+            color_list.append("All")
+            color_list.append("Red")
+            color_list.append("Orange")
+            color_list.append("Yellow")
+            color_list.append("Green")
+            color_list.append("Cyan")
+            color_list.append("Blue")
+            color_list.append("Purple")
+            color_list.append("Pink")
+
+            self.color_combo.set_model(color_list)
+            content_box.append(self.color_combo)
 
         # Apply button
         apply_btn = Gtk.Button(label="Apply Filters")
@@ -227,6 +289,11 @@ class SearchFilterBar(Gtk.Box):
 
             # Resolution dropdown
             self.resolution_dropdown.connect("notify::selected", self._on_resolution_changed)
+
+            # Advanced filters
+            self.top_range_combo.connect("notify::selected", self._on_top_range_changed)
+            self.aspect_combo.connect("notify::selected", self._on_aspect_changed)
+            self.color_combo.connect("notify::selected", self._on_color_changed)
 
     def _on_search_entry_changed(self, entry: Gtk.SearchEntry):
         """Handle search entry text change with debouncing."""
@@ -342,7 +409,6 @@ class SearchFilterBar(Gtk.Box):
         """Handle resolution dropdown change."""
         selected = dropdown.get_selected()
         if selected == 0:
-            # "All" selected
             self._remove_filter_chip_by_type("resolution")
             if "resolution" in self._active_filters:
                 del self._active_filters["resolution"]
@@ -353,6 +419,121 @@ class SearchFilterBar(Gtk.Box):
                 name = dropdown.get_model().get_string(selected)
                 self._active_filters["resolution"] = value
                 self._add_filter_chip("Resolution", name)
+
+        if self._on_filter_changed_callback:
+            self._on_filter_changed_callback(self._active_filters)
+
+    def _on_top_range_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        selected = dropdown.get_selected()
+        if selected == 0:
+            self._remove_filter_chip_by_type("top_range")
+            if "top_range" in self._active_filters:
+                del self._active_filters["top_range"]
+        else:
+            top_ranges = ["", "1d", "3d", "1w", "1M", "3M", "6M", "1y"]
+            if selected < len(top_ranges):
+                value = top_ranges[selected]
+                name = dropdown.get_model().get_string(selected)
+                self._active_filters["top_range"] = value
+                self._add_filter_chip("Top Range", name)
+
+        if self._on_filter_changed_callback:
+            self._on_filter_changed_callback(self._active_filters)
+
+    def _on_aspect_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        selected = dropdown.get_selected()
+        if selected == 0:
+            self._remove_filter_chip_by_type("ratios")
+            if "ratios" in self._active_filters:
+                del self._active_filters["ratios"]
+        else:
+            ratios = ["", "16x9", "16x10", "21x9", "9x16", "1x1"]
+            if selected < len(ratios):
+                value = ratios[selected]
+                name = dropdown.get_model().get_string(selected)
+                self._active_filters["ratios"] = value
+                self._add_filter_chip("Aspect Ratio", name)
+
+        if self._on_filter_changed_callback:
+            self._on_filter_changed_callback(self._active_filters)
+
+    def _on_color_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        selected = dropdown.get_selected()
+        if selected == 0:
+            self._remove_filter_chip_by_type("colors")
+            if "colors" in self._active_filters:
+                del self._active_filters["colors"]
+        else:
+            colors = [
+                "",
+                "660000",
+                "ff9900",
+                "ffcc33",
+                "ffff00",
+                "77cc33",
+                "66cccc",
+                "0066cc",
+                "993399",
+                "663399",
+                "333399",
+                "cccc33",
+                "ea4c88",
+            ]
+            if selected < len(colors):
+                value = colors[selected]
+                name = dropdown.get_model().get_string(selected)
+                self._active_filters["colors"] = value
+                self._add_filter_chip("Color", name)
+
+        if self._on_filter_changed_callback:
+            self._on_filter_changed_callback(self._active_filters)
+
+    def _on_aspect_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        """Handle aspect ratio dropdown change (Wallhaven only)."""
+        selected = dropdown.get_selected()
+        if selected == 0:
+            self._remove_filter_chip_by_type("ratios")
+            if "ratios" in self._active_filters:
+                del self._active_filters["ratios"]
+        else:
+            ratios = ["", "16x9", "16x10", "21x9", "9x16", "1x1"]
+            if selected < len(ratios):
+                value = ratios[selected]
+                name = dropdown.get_model().get_string(selected)
+                self._active_filters["ratios"] = value
+                self._add_filter_chip("Aspect Ratio", name)
+
+        if self._on_filter_changed_callback:
+            self._on_filter_changed_callback(self._active_filters)
+
+    def _on_color_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        """Handle color dropdown change (Wallhaven only)."""
+        selected = dropdown.get_selected()
+        if selected == 0:
+            self._remove_filter_chip_by_type("colors")
+            if "colors" in self._active_filters:
+                del self._active_filters["colors"]
+        else:
+            colors = [
+                "",
+                "660000",
+                "ff9900",
+                "ffcc33",
+                "ffff00",
+                "77cc33",
+                "66cccc",
+                "0066cc",
+                "993399",
+                "663399",
+                "333399",
+                "cccc33",
+                "ea4c88",
+            ]
+            if selected < len(colors):
+                value = colors[selected]
+                name = dropdown.get_model().get_string(selected)
+                self._active_filters["colors"] = value
+                self._add_filter_chip("Color", name)
 
         if self._on_filter_changed_callback:
             self._on_filter_changed_callback(self._active_filters)
@@ -441,6 +622,12 @@ class SearchFilterBar(Gtk.Box):
                 self.purity_nsfw.set_active(False)
             elif filter_type == "Resolution":
                 self.resolution_dropdown.set_selected(0)
+            elif filter_type == "Top Range" and self.tab_type == "wallhaven":
+                self.top_range_combo.set_selected(0)
+            elif filter_type == "Aspect Ratio" and self.tab_type == "wallhaven":
+                self.aspect_combo.set_selected(0)
+            elif filter_type == "Color" and self.tab_type == "wallhaven":
+                self.color_combo.set_selected(0)
 
             # Notify filter changed
             if self._on_filter_changed_callback:
@@ -457,12 +644,24 @@ class SearchFilterBar(Gtk.Box):
             return self._sort_mapping[selected]
         return None
 
-    def get_active_filters(self) -> dict[str, Any]:
-        """Get all active filters.
+    def get_advanced_filters(self) -> dict[str, Any]:
+        """Get advanced filters (top_range, ratios, colors, resolutions).
 
         Returns:
-            Dictionary of filter_type -> filter_value pairs
+            Dictionary of advanced filter_name -> filter_value pairs
         """
+        advanced = {}
+        if "top_range" in self._active_filters:
+            advanced["top_range"] = self._active_filters["top_range"]
+        if "ratios" in self._active_filters:
+            advanced["ratios"] = self._active_filters["ratios"]
+        if "colors" in self._active_filters:
+            advanced["colors"] = self._active_filters["colors"]
+        if "resolutions" in self._active_filters:
+            advanced["resolutions"] = self._active_filters["resolutions"]
+        return advanced
+
+    def get_active_filters(self) -> dict[str, Any]:
         return self._active_filters.copy()
 
     def set_sort_options(self, options: list[tuple[str, str]]):
@@ -505,6 +704,16 @@ class SearchFilterBar(Gtk.Box):
 
             # Reset resolution to All
             self.resolution_dropdown.set_selected(0)
+
+            self.top_range_combo.set_selected(0)
+            self.aspect_combo.set_selected(0)
+            self.color_combo.set_selected(0)
+
+            # Reset advanced filters (Wallhaven only)
+            if self.tab_type == "wallhaven":
+                self.top_range_combo.set_selected(0)
+                self.aspect_combo.set_selected(0)
+                self.color_combo.set_selected(0)
 
         # Notify filter changed
         if self._on_filter_changed_callback:

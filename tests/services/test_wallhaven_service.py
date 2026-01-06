@@ -229,6 +229,11 @@ class TestSearch:
                     sorting="views",
                     order="asc",
                     atleast="1920x1080",
+                    top_range="1w",
+                    ratios="16x9,16x10",
+                    colors="0066cc",
+                    resolutions="1920x1080,2560x1440",
+                    seed="abc123",
                 )
 
                 # Verify params were passed correctly
@@ -238,6 +243,11 @@ class TestSearch:
                 assert params["page"] == 2
                 assert params["categories"] == "010"
                 assert params["purity"] == "sfw"
+                assert params["topRange"] == "1w"
+                assert params["ratios"] == "16x9,16x10"
+                assert params["colors"] == "0066cc"
+                assert params["resolutions"] == "1920x1080,2560x1440"
+                assert params["seed"] == "abc123"
                 assert params["sorting"] == "views"
                 assert params["order"] == "asc"
                 assert params["atleast"] == "1920x1080"
