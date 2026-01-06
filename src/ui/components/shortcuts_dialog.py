@@ -153,11 +153,6 @@ class ShortcutsDialog(Adw.Dialog):
             row.set_title(shortcut)
             row.set_subtitle(description)
 
-            # Style shortcut as monospace
-            shortcut_label = row.get_title_label()
-            if shortcut_label:
-                shortcut_label.add_css_class("shortcut-key")
-
             group.add(row)
 
         return group

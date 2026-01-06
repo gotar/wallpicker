@@ -181,32 +181,19 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
         # Create views
         self.local_view = LocalView(self.local_view_model, self.banner_service)
-        self.stack.add_titled_with_icon(
-            self.local_view,
-            name="local",
-            title="Local",
-            icon_name="folder-symbolic",
-        )
+        local_page = self.stack.add_titled(self.local_view, "local", "Local")
+        local_page.set_icon_name("folder-symbolic")
 
         self.wallhaven_view = WallhavenView(self.wallhaven_view_model, self.banner_service)
-        self.stack.add_titled_with_icon(
-            self.wallhaven_view,
-            name="wallhaven",
-            title="Wallhaven",
-            icon_name="globe-symbolic",
-        )
+        wallhaven_page = self.stack.add_titled(self.wallhaven_view, "wallhaven", "Wallhaven")
+        wallhaven_page.set_icon_name("globe-symbolic")
 
         self.favorites_view = FavoritesView(self.favorites_view_model, self.banner_service)
-        self.stack.add_titled_with_icon(
-            self.favorites_view,
-            name="favorites",
-            title="Favorites",
-            icon_name="starred-symbolic",
-        )
+        favorites_page = self.stack.add_titled(self.favorites_view, "favorites", "Favorites")
+        favorites_page.set_icon_name("starred-symbolic")
 
         self.view_switcher_bar = Adw.ViewSwitcherBar()
         self.view_switcher_bar.set_stack(self.stack)
-        self.view_switcher_bar.add_css_class("auto-hide-wide")
         self.toolbar_view.add_bottom_bar(self.view_switcher_bar)
 
         # Wrap ViewStack in Adw.Clamp for optimal width constraint
@@ -527,7 +514,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
             return True
 
         # Alt + 1/2/3 : Alternative direct tab selection
-        elif state & Gdk.ModifierType.MOD1_MASK:
+        elif state & Gdk.ModifierType.ALT_MASK:
             if keyval == Gdk.KEY_1:
                 self.stack.set_visible_child_name("local")
                 return True
