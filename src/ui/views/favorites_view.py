@@ -19,7 +19,6 @@ class FavoritesView(Adw.Bin):
     """View for favorites wallpaper browsing with adaptive layout"""
 
     def __init__(self, view_model: FavoritesViewModel, banner_service=None):
-        print(f"DEBUG: FavoritesView.__init__ called with view_model: {view_model}")
         super().__init__()
         self.view_model = view_model
         self.banner_service = banner_service
@@ -34,10 +33,6 @@ class FavoritesView(Adw.Bin):
         self._setup_keyboard_shortcuts()
         self._setup_pull_to_refresh()
         self._bind_to_view_model()
-
-        print(
-            f"DEBUG: FavoritesView setup complete - visible: {self.get_visible()}, sensitive: {self.get_sensitive()}"
-        )
 
     def _create_ui(self):
         """Create main UI structure"""
@@ -300,17 +295,9 @@ class FavoritesView(Adw.Bin):
         self.card_wallpaper_map.clear()
 
         # Add new cards
-        for favorite in self.view_model.favorites:
+        for favorite in favorites:
             card = self._create_wallpaper_card(favorite)
             self.wallpapers_grid.append(card)
-
-        # Debug: Check if cards are created and focusable
-        print(f"DEBUG: Created {len(self.view_model.favorites)} favorite cards")
-        if self.wallpapers_grid.get_first_child():
-            first_card = self.wallpapers_grid.get_first_child()
-            print(
-                f"DEBUG: First card - visible: {first_card.get_visible()}, sensitive: {first_card.get_sensitive()}, can_focus: {first_card.get_can_focus()}"
-            )
 
     def update_status(self):
         """Update status bar"""
