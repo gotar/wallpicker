@@ -195,12 +195,14 @@ class TestSearch:
                 mock_session.get = MagicMock(return_value=mock_context)
                 mock_get_session.return_value = mock_session
 
-                wallpapers = await wallhaven_service.search(query="test")
+                wallpapers, meta = await wallhaven_service.search(query="test")
 
                 assert len(wallpapers) == 2
                 assert all(isinstance(w, Wallpaper) for w in wallpapers)
                 assert wallpapers[0].id == "abc123"
                 assert wallpapers[1].id == "def456"
+                assert meta["current_page"] == 1
+                assert meta["last_page"] == 5
                 mock_rate_limit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -249,9 +251,7 @@ class TestSearch:
                 mock_response = MagicMock()
                 mock_response.status = 500
                 mock_response.raise_for_status = MagicMock(
-                    side_effect=aiohttp.ClientResponseError(
-                        MagicMock(), MagicMock(), status=500
-                    )
+                    side_effect=aiohttp.ClientResponseError(MagicMock(), MagicMock(), status=500)
                 )
 
                 # Mock async context manager
@@ -263,9 +263,7 @@ class TestSearch:
                     await wallhaven_service.search()
 
     @pytest.mark.asyncio
-    async def test_search_malformed_wallpaper(
-        self, wallhaven_service, sample_wallpaper_response
-    ):
+    async def test_search_malformed_wallpaper(self, wallhaven_service, sample_wallpaper_response):
         """Test search with malformed wallpaper data."""
         sample_wallpaper_response["data"].append({"invalid": "data"})
 
@@ -303,9 +301,11 @@ class TestSearch:
                 mock_session.get = MagicMock(return_value=mock_context)
                 mock_get_session.return_value = mock_session
 
-                wallpapers = await wallhaven_service.search()
+                wallpapers, meta = await wallhaven_service.search()
 
                 assert len(wallpapers) == 0
+                assert meta == {}
+                assert meta == {}
 
 
 class TestWallpaperFromDict:
@@ -477,9 +477,7 @@ class TestDownload:
                 await wallhaven_service.download(wallpaper, dest, progress_callback)
 
                 assert len(progress_updates) > 0
-                assert all(
-                    downloaded <= len(chunk_data) for downloaded, _ in progress_updates
-                )
+                assert all(downloaded <= len(chunk_data) for downloaded, _ in progress_updates)
 
     @pytest.mark.asyncio
     async def test_download_http_error(self, wallhaven_service, tmp_path):
@@ -502,9 +500,7 @@ class TestDownload:
                 mock_response = MagicMock()
                 mock_response.status = 404
                 mock_response.raise_for_status = MagicMock(
-                    side_effect=aiohttp.ClientResponseError(
-                        MagicMock(), MagicMock(), status=404
-                    )
+                    side_effect=aiohttp.ClientResponseError(MagicMock(), MagicMock(), status=404)
                 )
 
                 # Mock async context manager

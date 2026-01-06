@@ -54,25 +54,27 @@ class MainWindow(Adw.Application):
             wallhaven_service = WallhavenService()
             thumbnail_cache = ThumbnailCache()
 
-            self.wallhaven_view_model = WallhavenViewModel(
-                wallhaven_service=wallhaven_service,
-                thumbnail_cache=thumbnail_cache,
-            )
-            self.wallhaven_view_model.favorites_service = favorites_service
-            self.wallhaven_view_model.notification_service = notification_service
-            self.local_view_model = LocalViewModel(
-                local_service=local_service,
-                wallpaper_setter=self.wallpaper_setter,
-                pictures_dir=config.pictures_dir,
-                config_service=self.config_service,
-            )
-            self.local_view_model.favorites_service = favorites_service
-            self.local_view_model.notification_service = notification_service
-            self.favorites_view_model = FavoritesViewModel(
-                favorites_service=favorites_service,
-                wallpaper_setter=self.wallpaper_setter,
-            )
-            self.favorites_view_model.notification_service = notification_service
+        self.wallhaven_view_model = WallhavenViewModel(
+            wallhaven_service=wallhaven_service,
+            thumbnail_cache=thumbnail_cache,
+            wallpaper_setter=self.wallpaper_setter,
+            config_service=self.config_service,
+        )
+        self.wallhaven_view_model.favorites_service = favorites_service
+        self.wallhaven_view_model.notification_service = notification_service
+        self.local_view_model = LocalViewModel(
+            local_service=local_service,
+            wallpaper_setter=self.wallpaper_setter,
+            pictures_dir=config.pictures_dir,
+            config_service=self.config_service,
+        )
+        self.local_view_model.favorites_service = favorites_service
+        self.local_view_model.notification_service = notification_service
+        self.favorites_view_model = FavoritesViewModel(
+            favorites_service=favorites_service,
+            wallpaper_setter=self.wallpaper_setter,
+        )
+        self.favorites_view_model.notification_service = notification_service
 
         self.window = WallPickerWindow(
             application=self,
@@ -165,3 +167,11 @@ class WallPickerWindow(Adw.ApplicationWindow):
         visible_child = stack.get_visible_child()
         if visible_child == self.favorites_view:
             self.favorites_view_model.load_favorites()
+        elif visible_child == self.wallhaven_view:
+
+            def load_wallhaven():
+                import asyncio
+
+                asyncio.run(self.wallhaven_view_model.load_initial_wallpapers())
+
+            self.wallhaven_view_model._executor.submit(load_wallhaven)

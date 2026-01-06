@@ -259,7 +259,12 @@ wallpicker/
 ### Running Tests
 
 ```bash
-python tests/run_tests.py
+python -m pytest tests/
+```
+
+Run specific test files:
+```bash
+python -m pytest tests/ui/test_favorites_view_model.py
 ```
 
 ### Contributing

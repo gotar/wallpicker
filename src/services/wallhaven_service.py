@@ -63,47 +63,33 @@ class WallhavenService(BaseService):
     async def search(
         self,
         query: str = "",
-        page: int = 1,
         categories: str = "111",
-        purity: str = "sfw",
-        sorting: str = "relevance",
+        purity: str = "100",
+        sorting: str = "date_added",
         order: str = "desc",
         atleast: str = "",
-    ) -> list[Wallpaper]:
-        """Search Wallhaven for wallpapers.
-
-        Args:
-            query: Search query string
-            page: Page number
-            categories: Binary string for categories (general, anime, people)
-            purity: Content purity (sfw, sketchy, nsfw)
-            sorting: Sort method (relevance, random, views, favorites, toplist)
-            order: Sort order (asc, desc)
-            atleast: Minimum resolution (e.g., "1920x1080")
-
-        Returns:
-            List of Wallpaper domain models
-        """
+        page: int = 1,
+    ) -> tuple[list[Wallpaper], dict]:
+        """Search wallpapers with given parameters"""
         await self._rate_limit()
 
-        session = await self._get_session()
-
-        params: dict[str, Any] = {
-            "page": page,
+        params = {
             "q": query,
             "categories": categories,
             "purity": purity,
             "sorting": sorting,
             "order": order,
+            "atleast": atleast,
+            "page": page,
         }
 
-        if atleast:
-            params["atleast"] = atleast
-
         try:
-            self.log_info(f"Searching Wallhaven: query='{query}', page={page}")
-            async with session.get(f"{self.BASE_URL}/search", params=params) as response:
-                response.raise_for_status()
+            session = await self._get_session()
+            url = f"{self.BASE_URL}/search"
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    response.raise_for_status()
+
                 data = await response.json()
 
             wallpapers: list[Wallpaper] = []
@@ -115,7 +101,7 @@ class WallhavenService(BaseService):
                     self.log_warning(f"Failed to parse wallpaper: {e}")
 
             self.log_debug(f"Found {len(wallpapers)} wallpapers")
-            return wallpapers
+            return wallpapers, data.get("meta", {})
         except (aiohttp.ClientError, KeyError) as e:
             self.log_error(f"Wallhaven search failed: {e}", exc_info=True)
             raise ServiceError(f"Failed to search Wallhaven: {e}") from e

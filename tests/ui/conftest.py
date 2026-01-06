@@ -78,9 +78,12 @@ def mock_favorites_service(tmp_path):
 
     # Track state for add/remove operations
     def track_add(wallpaper):
+        favorites.append(Favorite(wallpaper=wallpaper, added_at=datetime.now()))
         return True
 
     def track_remove(wallpaper_id):
+        # Modify list in place so mock.get_favorites returns updated list
+        favorites[:] = [f for f in favorites if f.wallpaper_id != wallpaper_id]
         return True
 
     mock.add_favorite.side_effect = track_add
@@ -113,7 +116,8 @@ def mock_wallhaven_service():
     ]
 
     async def mock_search(*args, **kwargs):
-        return wallpapers
+        page = kwargs.get("page", 1)
+        return wallpapers, {"current_page": page, "last_page": 5}
 
     mock.search = AsyncMock(side_effect=mock_search)
 
@@ -156,11 +160,26 @@ def favorites_view_model(mock_favorites_service, mock_wallpaper_setter):
 
 
 @pytest.fixture
-def wallhaven_view_model(mock_wallhaven_service, mock_thumbnail_cache):
+def mock_config_service():
+    """Mock ConfigService for testing."""
+    from pathlib import Path
+    from domain.config import Config
+
+    mock_service = MagicMock()
+    mock_config = Config(local_wallpapers_dir=Path("/tmp/test_wallpapers"))
+    mock_service.get_config.return_value = mock_config
+    return mock_service
+
+
+@pytest.fixture
+def wallhaven_view_model(mock_wallhaven_service, mock_thumbnail_cache, mock_config_service):
     """Create WallhavenViewModel with mocked services."""
     from ui.view_models.wallhaven_view_model import WallhavenViewModel
+    from unittest.mock import MagicMock
 
     return WallhavenViewModel(
         wallhaven_service=mock_wallhaven_service,
         thumbnail_cache=mock_thumbnail_cache,
+        wallpaper_setter=MagicMock(),
+        config_service=mock_config_service,
     )

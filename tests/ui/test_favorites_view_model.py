@@ -111,7 +111,7 @@ class TestFavoritesViewModelRemoveFavorite:
         initial_count = len(favorites_view_model.favorites)
         favorite = favorites_view_model.favorites[0]
 
-        favorites_view_model.remove_favorite(favorite)
+        favorites_view_model.remove_favorite(favorite.wallpaper_id)
 
         assert len(favorites_view_model.favorites) == initial_count - 1
 

@@ -24,10 +24,14 @@ class WallhavenViewModel(BaseViewModel):
         self,
         wallhaven_service: WallhavenService,
         thumbnail_cache: ThumbnailCache,
+        wallpaper_setter,
+        config_service,
     ) -> None:
         super().__init__()
         self.wallhaven_service = wallhaven_service
         self.thumbnail_cache = thumbnail_cache
+        self.wallpaper_setter = wallpaper_setter
+        self.config_service = config_service
         self.favorites_service: FavoritesService | None = None
 
         self._wallpapers: list[Wallpaper] = []
@@ -142,7 +146,7 @@ class WallhavenViewModel(BaseViewModel):
             self.order = order
             self.resolution = resolution
 
-            wallpapers = await self.wallhaven_service.search(
+            wallpapers, meta = await self.wallhaven_service.search(
                 query=query,
                 page=page,
                 categories=category,
@@ -153,9 +157,8 @@ class WallhavenViewModel(BaseViewModel):
             )
 
             self.wallpapers = wallpapers
-            self.current_page = page
-            # API returns current page and has_next, not total pages
-            self.total_pages = page + 1  # Placeholder
+            self.current_page = meta.get("current_page", page)
+            self.total_pages = meta.get("last_page", page + 1)
 
         except Exception as e:
             self.error_message = f"Failed to search wallpapers: {e}"
@@ -197,6 +200,14 @@ class WallhavenViewModel(BaseViewModel):
         """Check if there's a previous page"""
         return self.current_page > 1
 
+    def can_load_next_page(self) -> bool:
+        """Check if there's a next page available"""
+        return self.current_page < self.total_pages
+
+    def can_load_prev_page(self) -> bool:
+        """Check if there's a previous page available"""
+        return self.current_page > 1
+
     def can_navigate(self) -> bool:
         """Check if pagination navigation is available"""
         return self.has_next_page() or self.has_prev_page()
@@ -213,9 +224,47 @@ class WallhavenViewModel(BaseViewModel):
             self.favorites_service.add_favorite(wallpaper)
 
             return True
-
         except Exception as e:
             self.error_message = f"Failed to add to favorites: {e}"
             return False
+        finally:
+            self.is_busy = False
+
+    async def download_wallpaper(self, wallpaper: Wallpaper) -> None:
+        config = self.config_service.get_config()
+
+        if not wallpaper.url:
+            return
+
+        try:
+            self.is_busy = True
+
+            filename = f"{wallpaper.id}.{wallpaper.url.rsplit('.', 1)[-1]}"
+            dest_path = config.local_wallpapers_dir / filename
+
+            session = await self.wallhaven_service._get_session()
+
+            async with session.get(wallpaper.url) as response:
+                if response.status != 200:
+                    raise Exception(f"Download failed: {response.status}")
+
+                content = await response.read()
+
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+            wallpaper.path = str(dest_path)
+            self.wallpapers = self.wallpapers.copy()
+            index = self.wallpapers.index(wallpaper)
+            self.wallpapers[index] = wallpaper
+            self.notify("wallpapers")
+
+        except Exception as e:
+            print(f"Download error: {e}")
+            import traceback
+
+            traceback.print_exc()
         finally:
             self.is_busy = False

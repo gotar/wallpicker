@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=WallPicker
+Comment=Browse and set wallpapers from Wallhaven and local collection
+Exec=/usr/bin/wallpicker
+Icon=wallpicker
+Terminal=false
+StartupNotify=true
+Categories=Utility;Graphics;
+Keywords=wallpaper;background;desktop;wallhaven;
+X-GNOME-UsesNotifications=true

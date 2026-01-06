@@ -156,7 +156,7 @@ def test_favorite_persistence(favorites_service: FavoritesService, sample_wallpa
 
     favorites = new_service.get_favorites()
     assert len(favorites) == 1
-    assert favorites[0].id == sample_wallpaper.id
+    assert favorites[0].wallpaper.id == sample_wallpaper.id
 
 
 def test_favorite_serialization(favorites_service: FavoritesService, sample_wallpaper: Wallpaper):
@@ -177,9 +177,5 @@ def test_days_since_added(favorites_service: FavoritesService, sample_wallpaper:
     favorites_service.add_favorite(sample_wallpaper)
 
     favorites_list = favorites_service.get_favorites()
-    # favorites_list contains Wallpaper objects, not Favorite objects
-    # The days_since_added is calculated in the Favorite domain model
-    # Get the Favorite domain object from the service's internal storage
-    # For now, just verify the favorite was added successfully
     assert len(favorites_list) == 1
-    assert favorites_list[0].id == sample_wallpaper.id
+    assert favorites_list[0].wallpaper.id == sample_wallpaper.id

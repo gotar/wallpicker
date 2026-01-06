@@ -195,13 +195,15 @@ class FavoritesService(BaseService):
             return favorites
 
         # Build searchable strings from wallpaper data
-        search_strings = [f"{w.id} {w.category} {w.url}" for w in favorites]
+        search_strings = [
+            f"{w.wallpaper.id} {w.wallpaper.category} {w.wallpaper.url}" for w in favorites
+        ]
 
         # Use rapidfuzz for fuzzy matching
         results = process.extract(query, search_strings, limit=len(favorites))
         matched_indices = [result[2] for result in results if result[1] >= 60]
 
-        return [favorites[i] for i in matched_indices]
+        return [favorites[i].wallpaper for i in matched_indices]
 
     def _save_favorites(self, favorites: list[Favorite]) -> None:
         """Save favorites to file.

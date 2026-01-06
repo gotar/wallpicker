@@ -1,6 +1,9 @@
 """View for Wallhaven wallpaper browsing."""
 
+import asyncio
+import concurrent.futures
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -21,13 +24,31 @@ class WallhavenView(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.view_model = view_model
 
-        # Create UI components
+        self._event_loop = asyncio.new_event_loop()
+
+        def run_loop():
+            asyncio.set_event_loop(self._event_loop)
+            self._event_loop.run_forever()
+
+        self._loop_thread = threading.Thread(target=run_loop, daemon=True)
+        self._loop_thread.start()
+
         self._create_filter_bar()
         self._create_wallpaper_grid()
         self._create_pagination_controls()
 
-        # Bind to ViewModel state
         self._bind_to_view_model()
+
+    def __del__(self):
+        if hasattr(self, "_event_loop") and self._event_loop.is_running():
+            self._event_loop.call_soon_threadsafe(self._event_loop.stop)
+
+    def _run_async(self, coro):
+        future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
+        try:
+            future.result(timeout=30)
+        except concurrent.futures.TimeoutError:
+            print("Timeout waiting for async operation")
 
     def _create_filter_bar(self):
         """Create filter and search controls"""
@@ -143,7 +164,6 @@ class WallhavenView(Gtk.Box):
         self.view_model.connect("notify::total-pages", self._on_page_changed)
 
     def _on_search_clicked(self, button):
-        """Handle search button click"""
         category = self._get_category()
         sorting = self._get_sorting()
         query = self.search_entry.get_text()
@@ -151,39 +171,19 @@ class WallhavenView(Gtk.Box):
         self.view_model.category = category
         self.view_model.sorting = sorting
 
-        import threading
-        import asyncio
-
-        def run_search():
-            asyncio.run(
-                self.view_model.search_wallpapers(
-                    query=query,
-                    category=category,
-                    sorting=sorting,
-                )
+        self._run_async(
+            self.view_model.search_wallpapers(
+                query=query,
+                category=category,
+                sorting=sorting,
             )
-
-        threading.Thread(target=run_search, daemon=True).start()
+        )
 
     def _on_prev_page_clicked(self, button):
-        """Handle previous page button click"""
-        import threading
-        import asyncio
-
-        def run_prev():
-            asyncio.run(self.view_model.load_prev_page())
-
-        threading.Thread(target=run_prev, daemon=True).start()
+        self._run_async(self.view_model.load_prev_page())
 
     def _on_next_page_clicked(self, button):
-        """Handle next page button click"""
-        import threading
-        import asyncio
-
-        def run_next():
-            asyncio.run(self.view_model.load_next_page())
-
-        threading.Thread(target=run_next, daemon=True).start()
+        self._run_async(self.view_model.load_next_page())
 
     def _on_wallpapers_changed(self, obj, pspec):
         """Handle wallpapers property change"""
@@ -237,6 +237,13 @@ class WallhavenView(Gtk.Box):
         actions_box.set_halign(Gtk.Align.CENTER)
         actions_box.set_homogeneous(True)
 
+        download_btn = Gtk.Button(
+            icon_name="folder-download-symbolic", tooltip_text="Download wallpaper"
+        )
+        download_btn.add_css_class("action-button")
+        download_btn.connect("clicked", self._on_download_wallpaper, wallpaper)
+        actions_box.append(download_btn)
+
         set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
@@ -251,23 +258,57 @@ class WallhavenView(Gtk.Box):
         return card
 
     def _on_set_wallpaper(self, button, wallpaper):
-        result = self.view_model.wallpaper_setter.set_wallpaper(wallpaper.path)
-        if not result:
-            self.error_message = "Failed to set wallpaper"
+        async def set_with_download():
+            if not wallpaper.path:
+                downloaded = await self.view_model.download_wallpaper(wallpaper)
+                if downloaded and downloaded.path:
+                    if self.view_model.notification_service:
+                        self.view_model.notification_service.notify_success(
+                            "Wallpaper set successfully"
+                        )
+                    self.view_model.wallpaper_setter.set_wallpaper(downloaded.path)
+                    self.update_wallpaper_grid(self.view_model.wallpapers)
+                elif self.view_model.error_message:
+                    if self.view_model.notification_service:
+                        self.view_model.notification_service.notify_error(
+                            self.view_model.error_message
+                        )
+            else:
+                if self.view_model.notification_service:
+                    self.view_model.notification_service.notify_success(
+                        "Wallpaper set successfully"
+                    )
+                self.view_model.wallpaper_setter.set_wallpaper(wallpaper.path)
+
+        self._run_async(set_with_download())
 
     def _on_card_double_clicked(self, gesture, n_press, x, y, wallpaper):
         self._on_set_wallpaper(None, wallpaper)
 
+    def _on_download_wallpaper(self, button, wallpaper):
+        async def download_only():
+            downloaded = await self.view_model.download_wallpaper(wallpaper)
+            if downloaded and downloaded.path:
+                if self.view_model.notification_service:
+                    self.view_model.notification_service.notify_success(
+                        f"Wallpaper downloaded to: {downloaded.path}"
+                    )
+                self.update_wallpaper_grid(self.view_model.wallpapers)
+            elif self.view_model.error_message:
+                if self.view_model.notification_service:
+                    self.view_model.notification_service.notify_error(self.view_model.error_message)
+
+        self._run_async(download_only())
+
     def _on_add_to_favorites(self, button, wallpaper):
-        def on_idle():
-            import asyncio
+        async def add_to_favs():
+            result = await self.view_model.add_to_favorites(wallpaper)
+            if result and self.view_model.notification_service:
+                self.view_model.notification_service.notify_success("Added to favorites")
+            elif not result and self.view_model.notification_service:
+                self.view_model.notification_service.notify_error("Failed to add to favorites")
 
-            asyncio.run(self.view_model.add_to_favorites(wallpaper))
-            return False
-
-        from gi.repository import GLib
-
-        GLib.idle_add(on_idle)
+        self._run_async(add_to_favs())
 
     def _get_category(self) -> str:
         """Get selected category code"""
