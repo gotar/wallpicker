@@ -1,8 +1,9 @@
 """Banner Service for managing Adw.Banner notifications."""
 
+from collections.abc import Callable
 from enum import IntEnum, auto
-from typing import Callable, Optional
-from gi.repository import Adw, GObject, GLib
+
+from gi.repository import Adw, GLib, GObject
 
 
 class BannerPriority(IntEnum):
@@ -48,10 +49,22 @@ class BannerService(GObject.Object):
         self.banner_container.set_button_label(None)
         self._current_callback = None
         self._current_banner = None
-        self.current_banner_type = None
+        self.current_banner_type = ""
         self.is_visible = False
 
-    def _apply_css_class(self, css_class: Optional[str]) -> None:
+        # Banner queue for priority-based management
+        self._banner_queue = []
+        self._dismiss_timeout = None
+
+        # Connect button-clicked signal to handle callbacks
+        self.banner_container.connect("button-clicked", self._on_button_clicked)
+
+    def _on_button_clicked(self, banner) -> None:
+        """Handle button click on banner."""
+        if self._current_callback:
+            self._current_callback()
+
+    def _apply_css_class(self, css_class: str | None) -> None:
         """Apply CSS class to banner.
 
         Args:
@@ -73,7 +86,9 @@ class BannerService(GObject.Object):
         Args:
             seconds: Seconds before dismissal
         """
-        self._dismiss_timeout = GLib.timeout_add_seconds(seconds, self._on_auto_dismiss_timeout)
+        self._dismiss_timeout = GLib.timeout_add_seconds(
+            seconds, self._on_auto_dismiss_timeout
+        )
 
     def _cancel_auto_dismiss(self) -> None:
         """Cancel scheduled auto-dismiss."""
@@ -112,7 +127,9 @@ class BannerService(GObject.Object):
             css_class="selection-banner",
         )
 
-    def show_storage_warning(self, used_mb: int, limit_mb: int, on_clear_cache: Callable) -> None:
+    def show_storage_warning(
+        self, used_mb: int, limit_mb: int, on_clear_cache: Callable
+    ) -> None:
         """Show storage warning banner.
 
         Args:
@@ -134,8 +151,8 @@ class BannerService(GObject.Object):
     def show_api_warning(
         self,
         message: str,
-        button_text: Optional[str] = None,
-        on_button_click: Optional[Callable] = None,
+        button_text: str | None = None,
+        on_button_click: Callable | None = None,
     ) -> None:
         """Show API quota warning.
 
@@ -156,8 +173,8 @@ class BannerService(GObject.Object):
     def show_info_banner(
         self,
         message: str,
-        button_text: Optional[str] = None,
-        on_button_click: Optional[Callable] = None,
+        button_text: str | None = None,
+        on_button_click: Callable | None = None,
     ) -> None:
         """Show informational banner.
 
@@ -173,6 +190,7 @@ class BannerService(GObject.Object):
             priority=BannerPriority.LOW,
             banner_type=BannerType.INFO,
             css_class="info-banner",
+            auto_dismiss_seconds=10,
         )
 
     def clear_banner(self) -> None:
@@ -185,10 +203,8 @@ class BannerService(GObject.Object):
 
     def hide_selection_banner(self) -> None:
         """Hide multi-selection banner specifically."""
-        # Remove from queue if pending
         self._remove_from_queue_by_type(BannerType.SELECTION)
 
-        # Clear if currently visible
         if self.current_banner_type == BannerType.SELECTION:
             self.clear_banner()
 
@@ -205,6 +221,112 @@ class BannerService(GObject.Object):
         self._cancel_auto_dismiss()
         self._clear_current_banner()
         self._banner_queue.clear()
+
+    def _show_banner(
+        self,
+        title: str,
+        button_text: str | None = None,
+        callback: Callable | None = None,
+        priority: BannerPriority = BannerPriority.LOW,
+        banner_type: str = BannerType.INFO,
+        css_class: str | None = None,
+        auto_dismiss_seconds: int | None = None,
+    ) -> None:
+        """Show a banner with priority queue management.
+
+        Args:
+            title: Banner title/message
+            button_text: Optional button label
+            callback: Optional button callback
+            priority: Banner priority for queue ordering
+            banner_type: Type identifier for banner
+            css_class: CSS class to apply
+            auto_dismiss_seconds: Optional auto-dismiss timeout
+        """
+        entry = {
+            "title": title,
+            "button_text": button_text,
+            "callback": callback,
+            "priority": priority,
+            "type": banner_type,
+            "css_class": css_class,
+            "auto_dismiss_seconds": auto_dismiss_seconds,
+        }
+        self._add_to_queue(entry)
+        self._process_next_banner()
+
+    def _add_to_queue(self, entry: dict) -> None:
+        """Add banner to priority queue, replacing same-type banners.
+
+        Args:
+            entry: Banner entry dictionary
+        """
+        self._remove_from_queue_by_type(entry["type"])
+        self._banner_queue.append(entry)
+        self._banner_queue.sort(key=lambda x: x["priority"], reverse=True)
+
+    def _remove_from_queue_by_type(self, banner_type: str) -> None:
+        """Remove banners of specified type from queue.
+
+        Args:
+            banner_type: Banner type to remove
+        """
+        self._banner_queue = [
+            banner for banner in self._banner_queue if banner["type"] != banner_type
+        ]
+
+    def _display_banner_entry(self, entry: dict) -> None:
+        """Display a banner entry from the queue.
+
+        Args:
+            entry: Banner entry dictionary
+        """
+        self._apply_css_class(entry.get("css_class"))
+
+        self.banner_container.set_title(entry["title"])
+
+        if entry["button_text"]:
+            self.banner_container.set_button_label(entry["button_text"])
+        else:
+            self.banner_container.set_button_label(None)
+
+        self._current_callback = entry.get("callback")
+
+        self.banner_container.set_revealed(True)
+        self.current_banner_type = entry["type"]
+        self.is_visible = True
+
+        if entry.get("auto_dismiss_seconds"):
+            self._schedule_auto_dismiss(entry["auto_dismiss_seconds"])
+        elif entry["type"] == BannerType.INFO:
+            self._schedule_auto_dismiss(10)
+
+    def _process_next_banner(self) -> None:
+        """Process next banner from the queue."""
+        # Clear current banner
+        self._clear_current_banner()
+
+        # Display next banner if queue not empty
+        if self._banner_queue:
+            next_banner = self._banner_queue.pop(0)
+            self._display_banner_entry(next_banner)
+
+    def _clear_current_banner(self) -> None:
+        """Clear the currently displayed banner."""
+        if not self.is_visible:
+            return
+
+        # Cancel any pending auto-dismiss
+        self._cancel_auto_dismiss()
+
+        # Hide banner
+        self.banner_container.set_revealed(False)
+        self.current_banner_type = None
+        self.is_visible = False
+        self._current_callback = None
+
+        # Clear CSS classes
+        self._apply_css_class(None)
 
     @property
     def logger(self):

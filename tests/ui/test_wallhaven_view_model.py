@@ -9,7 +9,7 @@ class TestWallhavenViewModelInit:
     def test_init_with_services(self, wallhaven_view_model):
         """Test that ViewModel initializes with required services."""
         assert wallhaven_view_model.wallhaven_service is not None
-        assert wallhaven_view_model.thumbnail_cache is not None
+        assert wallhaven_view_model._thumbnail_cache is not None
 
     def test_init_default_state(self, wallhaven_view_model):
         """Test initial state values."""
@@ -28,9 +28,7 @@ class TestWallhavenViewModelSearchWallpapers:
     """Test search_wallpapers method."""
 
     @pytest.mark.asyncio
-    async def test_search_wallpapers_success(
-        self, wallhaven_view_model, mock_wallhaven_service
-    ):
+    async def test_search_wallpapers_success(self, wallhaven_view_model, mock_wallhaven_service):
         """Test successful wallpaper search."""
         await wallhaven_view_model.search_wallpapers(query="nature")
 
@@ -40,9 +38,7 @@ class TestWallhavenViewModelSearchWallpapers:
         assert wallhaven_view_model.is_busy is False
 
     @pytest.mark.asyncio
-    async def test_search_with_filters(
-        self, wallhaven_view_model, mock_wallhaven_service
-    ):
+    async def test_search_with_filters(self, wallhaven_view_model, mock_wallhaven_service):
         """Test search with category and purity filters."""
         await wallhaven_view_model.search_wallpapers(
             query="test",
@@ -56,9 +52,7 @@ class TestWallhavenViewModelSearchWallpapers:
         assert wallhaven_view_model.sorting == "random"
 
     @pytest.mark.asyncio
-    async def test_search_error_handling(
-        self, wallhaven_view_model, mock_wallhaven_service
-    ):
+    async def test_search_error_handling(self, wallhaven_view_model, mock_wallhaven_service):
         """Test error handling during search."""
         mock_wallhaven_service.search.side_effect = Exception("API Error")
 
@@ -97,9 +91,7 @@ class TestWallhavenViewModelPagination:
         assert wallhaven_view_model.current_page == 1
 
     @pytest.mark.asyncio
-    async def test_load_prev_page_at_first(
-        self, wallhaven_view_model, mock_wallhaven_service
-    ):
+    async def test_load_prev_page_at_first(self, wallhaven_view_model, mock_wallhaven_service):
         """Test that prev page does nothing at first page."""
         await wallhaven_view_model.search_wallpapers(query="test", page=1)
 

@@ -1,15 +1,16 @@
 """Modern Preview Dialog component for wallpaper inspection."""
 
-import gi
 import threading
 from pathlib import Path
+
+import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 
-from gi.repository import Adw, Gdk, GdkPixbuf, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 
 class PreviewDialog(Adw.Dialog):
@@ -149,7 +150,9 @@ class PreviewDialog(Adw.Dialog):
         # Resolution row
         resolution_row = Adw.ActionRow()
         resolution_row.set_title("Resolution")
-        resolution = f"{self.wallpaper.resolution.width}×{self.wallpaper.resolution.height}"
+        resolution = (
+            f"{self.wallpaper.resolution.width}×{self.wallpaper.resolution.height}"
+        )
         resolution_row.set_subtitle(resolution)
         resolution_row.add_suffix(Gtk.Image(icon_name="display-symbolic"))
         metadata_group.add(resolution_row)
@@ -237,7 +240,9 @@ class PreviewDialog(Adw.Dialog):
             self.delete_btn.set_hexpand(True)
             self.delete_btn.set_size_request(-1, 42)
             self.delete_btn.set_icon_name("user-trash-symbolic")
-            self.delete_btn.set_visible(self.wallpaper.source.value in ("local", "favorite"))
+            self.delete_btn.set_visible(
+                self.wallpaper.source.value in ("local", "favorite")
+            )
             self.delete_btn.connect("clicked", self._on_delete)
             actions_group.add(self.delete_btn)
 
@@ -294,7 +299,9 @@ class PreviewDialog(Adw.Dialog):
             "local": "folder-symbolic",
             "favorite": "starred-symbolic",
         }
-        icon_name = icon_map.get(self.wallpaper.source.value, "image-x-generic-symbolic")
+        icon_name = icon_map.get(
+            self.wallpaper.source.value, "image-x-generic-symbolic"
+        )
         return Gtk.Image(icon_name=icon_name)
 
     def _update_favorite_button(self):
@@ -345,7 +352,9 @@ class PreviewDialog(Adw.Dialog):
 
                         # Download and cache
                         return str(
-                            await self.thumbnail_cache.download_and_cache(image_source, session)
+                            await self.thumbnail_cache.download_and_cache(
+                                image_source, session
+                            )
                         )
 
                     loop = asyncio.new_event_loop()
@@ -377,14 +386,14 @@ class PreviewDialog(Adw.Dialog):
                 self._on_image_load_failed("Failed to load image")
 
         # Execute in thread
-        import threading
 
-        thread = threading.Thread(target=lambda: GLib.idle_add(on_loaded, load_in_thread()))
+        thread = threading.Thread(
+            target=lambda: GLib.idle_add(on_loaded, load_in_thread())
+        )
         thread.start()
 
     def _load_image_sync(self, image_source):
         """Fallback synchronous image loader."""
-        from gi.repository import GdkPixbuf
 
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_source)
         texture = Gdk.Texture.new_for_pixbuf(pixbuf)

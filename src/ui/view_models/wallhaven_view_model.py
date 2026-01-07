@@ -8,7 +8,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from gi.repository import GObject
+from gi.repository import GObject  # noqa: E402
 
 from domain.wallpaper import Wallpaper
 from services.favorites_service import FavoritesService
@@ -27,9 +27,8 @@ class WallhavenViewModel(BaseViewModel):
         wallpaper_setter,
         config_service,
     ) -> None:
-        super().__init__()
+        super().__init__(thumbnail_cache=thumbnail_cache)
         self.wallhaven_service = wallhaven_service
-        self.thumbnail_cache = thumbnail_cache
         self.wallpaper_setter = wallpaper_setter
         self.config_service = config_service
         self.favorites_service: FavoritesService | None = None
@@ -192,6 +191,7 @@ class WallhavenViewModel(BaseViewModel):
         colors: str = "",
         resolutions: str = "",
         seed: str = "",
+        append_results: bool = False,
     ) -> None:
         """Search wallpapers on Wallhaven"""
         try:
@@ -224,7 +224,11 @@ class WallhavenViewModel(BaseViewModel):
                 seed=seed,
             )
 
-            self.wallpapers = wallpapers
+            if append_results and self.wallpapers:
+                self.wallpapers = self.wallpapers + wallpapers
+            else:
+                self.wallpapers = wallpapers
+
             self.current_page = meta.get("current_page", page)
             self.total_pages = meta.get("last_page", page + 1)
 
@@ -250,6 +254,7 @@ class WallhavenViewModel(BaseViewModel):
                 colors=self.colors,
                 resolutions=self.resolutions,
                 seed=self.seed,
+                append_results=True,
             )
 
     async def load_prev_page(self) -> None:
@@ -269,6 +274,7 @@ class WallhavenViewModel(BaseViewModel):
                 colors=self.colors,
                 resolutions=self.resolutions,
                 seed=self.seed,
+                append_results=True,
             )
 
     def has_next_page(self) -> bool:
@@ -278,6 +284,11 @@ class WallhavenViewModel(BaseViewModel):
     def has_prev_page(self) -> bool:
         """Check if there's a previous page"""
         return self.current_page > 1
+
+    def select_all(self) -> None:
+        """Select all wallpapers."""
+        self._selected_wallpapers_list = self.wallpapers.copy()
+        self._update_selection_state()
 
     def can_load_next_page(self) -> bool:
         """Check if there's a next page available"""
@@ -297,13 +308,17 @@ class WallhavenViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            if not wallpaper.path:
-                await self.download_wallpaper(wallpaper)
+            local_path = None
 
-            if wallpaper.path:
-                result = self.wallpaper_setter.set_wallpaper(wallpaper.path)
+            if wallpaper.path and Path(wallpaper.path).exists():
+                local_path = wallpaper.path
+            else:
+                local_path = await self.download_wallpaper(wallpaper)
+
+            if local_path:
+                result = self.wallpaper_setter.set_wallpaper(local_path)
                 if result:
-                    filename = Path(wallpaper.path).name if wallpaper.path else wallpaper.id
+                    filename = Path(local_path).name
                     self.emit("wallpaper-set", filename)
                 return result
 
@@ -324,20 +339,30 @@ class WallhavenViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
+            if self.favorites_service.is_favorite(wallpaper.id):
+                return False
+
             self.favorites_service.add_favorite(wallpaper)
 
+            if self.notification_service:
+                self.notification_service.notify_success("Added to favorites")
+
             return True
+
         except Exception as e:
             self.error_message = f"Failed to add to favorites: {e}"
+            if self.notification_service:
+                self.notification_service.notify_error(f"Failed to add to favorites: {e}")
             return False
         finally:
             self.is_busy = False
 
-    async def download_wallpaper(self, wallpaper: Wallpaper) -> None:
+    async def download_wallpaper(self, wallpaper: Wallpaper) -> str | None:
+        """Download wallpaper and return the local path, or None on failure."""
         config = self.config_service.get_config()
 
         if not wallpaper.url:
-            return
+            return None
 
         try:
             self.is_busy = True
@@ -345,29 +370,25 @@ class WallhavenViewModel(BaseViewModel):
             filename = f"{wallpaper.id}.{wallpaper.url.rsplit('.', 1)[-1]}"
             dest_path = config.local_wallpapers_dir / filename
 
-            session = await self.wallhaven_service._get_session()
+            success = await self.wallhaven_service.download(wallpaper, dest_path)
 
-            async with session.get(wallpaper.url) as response:
-                if response.status != 200:
-                    raise Exception(f"Download failed: {response.status}")
-
-                content = await response.read()
-
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(dest_path, "wb") as f:
-                f.write(content)
-
-            wallpaper.path = str(dest_path)
-            self.wallpapers = self.wallpapers.copy()
-            index = self.wallpapers.index(wallpaper)
-            self.wallpapers[index] = wallpaper
-            self.notify("wallpapers")
+            if success:
+                wallpaper.path = str(dest_path)
+                self.wallpapers = self.wallpapers.copy()
+                index = self.wallpapers.index(wallpaper)
+                self.wallpapers[index] = wallpaper
+                self.notify("wallpapers")
+                return str(dest_path)
+            else:
+                self.error_message = f"Failed to download wallpaper {wallpaper.id}"
+                return None
 
         except Exception as e:
             print(f"Download error: {e}")
             import traceback
 
             traceback.print_exc()
+            self.error_message = f"Download error: {e}"
+            return None
         finally:
             self.is_busy = False

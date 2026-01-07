@@ -7,14 +7,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from datetime import datetime
+import sys
 from pathlib import Path
 
-import sys
+from gi.repository import GObject  # noqa: E402
 
-from gi.repository import GObject
-
-from domain.wallpaper import Wallpaper, WallpaperSource, WallpaperPurity, Resolution
+from domain.wallpaper import WallpaperPurity
 from services.favorites_service import FavoritesService
 from services.local_service import LocalWallpaper, LocalWallpaperService
 from services.wallpaper_setter import WallpaperSetter
@@ -31,8 +29,9 @@ class LocalViewModel(BaseViewModel):
         pictures_dir: Path | None = None,
         favorites_service: FavoritesService | None = None,
         config_service=None,
+        thumbnail_cache=None,
     ) -> None:
-        super().__init__()
+        super().__init__(thumbnail_cache=thumbnail_cache)
         self.local_service = local_service
         self.wallpaper_setter = wallpaper_setter
         self.pictures_dir = pictures_dir
@@ -138,12 +137,27 @@ class LocalViewModel(BaseViewModel):
         self.search_query = ""
         self.load_wallpapers()
 
+    def sort_by_name(self) -> None:
+        """Sort wallpapers by filename (A-Z)"""
+        self._wallpapers.sort(key=lambda w: w.filename.lower())
+        self.notify("wallpapers")
+
+    def sort_by_date(self) -> None:
+        """Sort wallpapers by modification date (newest first)"""
+        self._wallpapers.sort(key=lambda w: w.modified_time, reverse=True)
+        self.notify("wallpapers")
+
     def set_pictures_dir(self, path: Path) -> None:
         self.pictures_dir = path
         self.local_service.pictures_dir = path
         if self.config_service:
             self.config_service.set_pictures_dir(path)
         self.load_wallpapers()
+
+    def select_all(self) -> None:
+        """Select all wallpapers."""
+        self._selected_wallpapers_list = self.wallpapers.copy()
+        self._update_selection_state()
 
     def add_to_favorites(self, wallpaper: LocalWallpaper) -> bool:
         if not self.favorites_service:
@@ -154,8 +168,15 @@ class LocalViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            from domain.wallpaper import Wallpaper, WallpaperSource, Resolution
+            wallpaper_id = f"local_{hash(wallpaper.path)}"
+            if self.favorites_service.is_favorite(wallpaper_id):
+                if self.notification_service:
+                    self.notification_service.notify_warning("Already in favorites")
+                return False
+
             from PIL import Image
+
+            from domain.wallpaper import Resolution, Wallpaper, WallpaperSource
 
             width, height = 1920, 1080
             try:
@@ -165,7 +186,7 @@ class LocalViewModel(BaseViewModel):
                 pass
 
             wallpaper_domain = Wallpaper(
-                id=f"local_{hash(wallpaper.path)}",
+                id=wallpaper_id,
                 url=str(wallpaper.path),
                 path=str(wallpaper.path),
                 resolution=Resolution(width=width, height=height),

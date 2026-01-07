@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+import asyncio
 import os
 import sys
+
+from gi.events import GLibEventLoopPolicy
 
 # Add src directory to path
 src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
@@ -10,6 +13,8 @@ from ui.main_window import MainWindow
 
 
 def main():
+    asyncio.set_event_loop_policy(GLibEventLoopPolicy())
+
     debug = "--debug" in sys.argv
     if debug:
         sys.argv.remove("--debug")

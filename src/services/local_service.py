@@ -6,6 +6,7 @@ Handles browsing, searching, and deleting local wallpapers
 from pathlib import Path
 
 from gi.repository import GObject
+from PIL import Image
 from rapidfuzz import fuzz, process
 from send2trash import send2trash
 
@@ -13,12 +14,20 @@ from send2trash import send2trash
 class LocalWallpaper(GObject.Object):
     __gtype_name__ = "LocalWallpaper"
 
-    def __init__(self, path: Path, filename: str, size: int, modified_time: float):
+    def __init__(
+        self,
+        path: Path,
+        filename: str,
+        size: int,
+        modified_time: float,
+        resolution=None,
+    ):
         super().__init__()
         self.path = path
         self.filename = filename
         self.size = size
         self.modified_time = modified_time
+        self.resolution = resolution
 
 
 class LocalWallpaperService:
@@ -50,14 +59,28 @@ class LocalWallpaperService:
                 pattern = "*"
 
             for file_path in self.pictures_dir.glob(pattern):
-                if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
+                if (
+                    file_path.is_file()
+                    and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
+                ):
                     stat = file_path.stat()
+
+                    # Get image resolution
+                    resolution = None
+                    try:
+                        with Image.open(file_path) as img:
+                            width, height = img.size
+                            resolution = f"{width}x{height}"
+                    except Exception:
+                        pass
+
                     wallpapers.append(
                         LocalWallpaper(
                             path=file_path,
                             filename=file_path.name,
                             size=stat.st_size,
                             modified_time=stat.st_mtime,
+                            resolution=resolution,
                         )
                     )
 

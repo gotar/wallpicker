@@ -10,10 +10,10 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable  # noqa: E402
+from typing import Any  # noqa: E402
 
-from gi.repository import Adw, GLib, GObject, Gtk
+from gi.repository import GLib, GObject, Gtk  # noqa: E402
 
 
 class SearchFilterBar(Gtk.Box):
@@ -441,6 +441,7 @@ class SearchFilterBar(Gtk.Box):
             self._on_filter_changed_callback(self._active_filters)
 
     def _on_aspect_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        """Handle aspect ratio dropdown change (Wallhaven only)."""
         selected = dropdown.get_selected()
         if selected == 0:
             self._remove_filter_chip_by_type("ratios")
@@ -458,6 +459,7 @@ class SearchFilterBar(Gtk.Box):
             self._on_filter_changed_callback(self._active_filters)
 
     def _on_color_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+        """Handle color dropdown change (Wallhaven only)."""
         selected = dropdown.get_selected()
         if selected == 0:
             self._remove_filter_chip_by_type("colors")
@@ -484,24 +486,6 @@ class SearchFilterBar(Gtk.Box):
                 name = dropdown.get_model().get_string(selected)
                 self._active_filters["colors"] = value
                 self._add_filter_chip("Color", name)
-
-        if self._on_filter_changed_callback:
-            self._on_filter_changed_callback(self._active_filters)
-
-    def _on_aspect_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
-        """Handle aspect ratio dropdown change (Wallhaven only)."""
-        selected = dropdown.get_selected()
-        if selected == 0:
-            self._remove_filter_chip_by_type("ratios")
-            if "ratios" in self._active_filters:
-                del self._active_filters["ratios"]
-        else:
-            ratios = ["", "16x9", "16x10", "21x9", "9x16", "1x1"]
-            if selected < len(ratios):
-                value = ratios[selected]
-                name = dropdown.get_model().get_string(selected)
-                self._active_filters["ratios"] = value
-                self._add_filter_chip("Aspect Ratio", name)
 
         if self._on_filter_changed_callback:
             self._on_filter_changed_callback(self._active_filters)
@@ -589,7 +573,10 @@ class SearchFilterBar(Gtk.Box):
             next_child = child.get_next_sibling()
             if hasattr(child, "_filter_type") and child._filter_type == filter_type:
                 child.add_css_class("chip-removing")
-                GLib.timeout_add(200, lambda: self._chips_container.remove(child) or False)
+                chip_to_remove = child
+                GLib.timeout_add(
+                    200, lambda c=chip_to_remove: self._chips_container.remove(c) or False
+                )
                 break
             child = next_child
 

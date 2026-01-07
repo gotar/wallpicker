@@ -1,9 +1,7 @@
 """View for Wallhaven wallpaper browsing."""
 
 import asyncio
-import concurrent.futures
 import sys
-import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -13,8 +11,9 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from ui.components.search_filter_bar import SearchFilterBar
 from ui.view_models.wallhaven_view_model import WallhavenViewModel
 
 
@@ -26,15 +25,6 @@ class WallhavenView(Adw.Bin):
         self.view_model = view_model
         self.banner_service = banner_service
         self._last_selected_wallpaper = None
-
-        self._event_loop = asyncio.new_event_loop()
-
-        def run_loop():
-            asyncio.set_event_loop(self._event_loop)
-            self._event_loop.run_forever()
-
-        self._loop_thread = threading.Thread(target=run_loop, daemon=True)
-        self._loop_thread.start()
 
         self._create_ui()
 
@@ -52,74 +42,35 @@ class WallhavenView(Adw.Bin):
         self._create_wallpaper_grid()
         self._create_pagination_controls()
 
-    def __del__(self):
-        if hasattr(self, "_event_loop") and self._event_loop.is_running():
-            self._event_loop.call_soon_threadsafe(self._event_loop.stop)
-
     def _run_async(self, coro):
-        future = asyncio.run_coroutine_threadsafe(coro, self._event_loop)
-        try:
-            future.result(timeout=30)
-        except concurrent.futures.TimeoutError:
-            print("Timeout waiting for async operation")
+        asyncio.create_task(coro)
 
     def _create_filter_bar(self):
-        """Create filter and search controls"""
-        filter_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=12,
+        toolbar_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        toolbar_wrapper.add_css_class("toolbar-wrapper")
+        self.main_box.append(toolbar_wrapper)
+
+        self.search_filter_bar = SearchFilterBar(
+            tab_type="wallhaven",
+            on_search_changed=self._on_search_text_changed,
+            on_sort_changed=self._on_sort_changed,
+            on_filter_changed=self._on_filter_changed,
         )
-        filter_box.add_css_class("filter-bar")
+        toolbar_wrapper.append(self.search_filter_bar)
 
-        # Category dropdown
-        cat_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        cat_box.append(Gtk.Label(label="Category:"))
-        self.categories_combo = Gtk.ComboBoxText()
-        for cat in ["All", "General", "Anime", "People"]:
-            self.categories_combo.append_text(cat)
-        self.categories_combo.set_active(0)
-        cat_box.append(self.categories_combo)
-        filter_box.append(cat_box)
+    def _on_search_text_changed(self, text: str):
+        if text:
+            self.view_model.query = text
 
-        # Sorting dropdown
-        sort_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        sort_box.append(Gtk.Label(label="Sort:"))
-        self.sorting_combo = Gtk.ComboBoxText()
-        for sort in [
-            "date_added",
-            "relevance",
-            "random",
-            "views",
-            "favorites",
-            "toplist",
-        ]:
-            self.sorting_combo.append_text(sort)
-        self.sorting_combo.set_active(0)
-        sort_box.append(self.sorting_combo)
-        filter_box.append(sort_box)
+    def _on_sort_changed(self, sorting: str):
+        if sorting:
+            self.view_model.sorting = sorting
 
-        # Search entry
-        self.search_entry = Gtk.Entry(placeholder_text="Search wallpapers...")
-        self.search_entry.set_hexpand(True)
-        filter_box.append(self.search_entry)
-
-        # Search button
-        search_btn = Gtk.Button(icon_name="system-search-symbolic", tooltip_text="Search")
-        search_btn.add_css_class("suggested-action")
-        search_btn.connect("clicked", self._on_search_clicked)
-        filter_box.append(search_btn)
-
-        # Loading spinner
-        self.loading_spinner = Gtk.Spinner(spinning=False)
-        filter_box.append(self.loading_spinner)
-
-        # Error label
-        self.error_label = Gtk.Label(wrap=True)
-        self.error_label.add_css_class("error")
-        self.error_label.set_visible(False)
-        filter_box.append(self.error_label)
-
-        self.main_box.append(filter_box)
+    def _on_filter_changed(self, filters: dict):
+        self.view_model.top_range = filters.get("top_range", "")
+        self.view_model.ratios = filters.get("ratios", "")
+        self.view_model.colors = filters.get("colors", "")
+        self.view_model.resolutions = filters.get("resolutions", "")
 
     def _create_wallpaper_grid(self):
         """Create wallpaper grid display"""
@@ -159,13 +110,6 @@ class WallhavenView(Adw.Bin):
         self.main_box.append(status_box)
 
     def _bind_to_view_model(self):
-        GObject.Object.bind_property(
-            self.view_model,
-            "is-busy",
-            self.loading_spinner,
-            "spinning",
-            GObject.BindingFlags.DEFAULT,
-        )
         self.view_model.connect("notify::wallpapers", self._on_wallpapers_changed)
         self.view_model.connect("notify::current-page", self._on_page_changed)
         self.view_model.connect("notify::total-pages", self._on_page_changed)
@@ -335,18 +279,13 @@ class WallhavenView(Adw.Bin):
         """Refresh current Wallhaven search."""
 
         async def refresh():
-            category = self._get_category()
-            sorting = self._get_sorting()
-            query = self.search_entry.get_text()
+            query = self.search_filter_bar.get_search_text()
+            sorting = self.search_filter_bar.get_active_sort()
 
-            self.view_model.category = category
+            self.view_model.query = query
             self.view_model.sorting = sorting
 
-            await self.view_model.search_wallpapers(
-                query=query,
-                category=category,
-                sorting=sorting,
-            )
+            await self.view_model.search_wallpapers()
 
         self._run_async(refresh())
 
@@ -382,34 +321,18 @@ class WallhavenView(Adw.Bin):
         self.view_model.clear_selection()
 
     def _on_search_clicked(self, button):
-        category = self._get_category()
-        sorting = self._get_sorting()
-        query = self.search_entry.get_text()
+        query = self.search_filter_bar.get_search_text()
+        sorting = self.search_filter_bar.get_active_sort()
         advanced = self.search_filter_bar.get_advanced_filters()
 
-        self.view_model.category = category
+        self.view_model.query = query
         self.view_model.sorting = sorting
-
         self.view_model.top_range = advanced.get("top_range", "")
         self.view_model.ratios = advanced.get("ratios", "")
         self.view_model.colors = advanced.get("colors", "")
         self.view_model.resolutions = advanced.get("resolutions", "")
 
-        self._run_async(
-            self.view_model.search_wallpapers(
-                query=query,
-                page=1,
-                category=category,
-                purity="100",
-                sorting=sorting,
-                order="desc",
-                resolution="",
-                top_range=self.view_model.top_range,
-                ratios=self.view_model.ratios,
-                colors=self.view_model.colors,
-                resolutions=self.view_model.resolutions,
-            )
-        )
+        self._run_async(self.view_model.search_wallpapers())
 
     def _on_prev_page_clicked(self, button):
         self._run_async(self.view_model.load_prev_page())
@@ -482,29 +405,60 @@ class WallhavenView(Adw.Bin):
 
         card.append(overlay)
 
+        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        info_box.add_css_class("card-info-box")
+
+        metadata_label = Gtk.Label()
+        metadata_parts = []
+
+        if hasattr(wallpaper, "resolution") and wallpaper.resolution:
+            metadata_parts.append(str(wallpaper.resolution))
+
+        if hasattr(wallpaper, "file_size") and wallpaper.file_size:
+            size = wallpaper.file_size
+            if size >= 1024 * 1024:
+                size_str = f"{size / (1024 * 1024):.1f} MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+            metadata_parts.append(size_str)
+
+        metadata_label.set_text(" • ".join(metadata_parts) if metadata_parts else "")
+        metadata_label.add_css_class("caption")
+        info_box.append(metadata_label)
+
+        card.append(info_box)
+
         click = Gtk.GestureClick()
         click.set_button(1)
         click.connect("pressed", self._on_card_clicked, wallpaper, card, checkbox)
         card.add_controller(click)
 
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
-        actions_box.set_homogeneous(True)
 
         download_btn = Gtk.Button(
             icon_name="folder-download-symbolic", tooltip_text="Download wallpaper"
         )
         download_btn.add_css_class("action-button")
+        download_btn.add_css_class("download-action")
+        download_btn.set_cursor_from_name("pointer")
         download_btn.connect("clicked", self._on_download_wallpaper, wallpaper)
         actions_box.append(download_btn)
 
         set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
+        set_btn.add_css_class("suggested-action")
+        set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
         fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
         fav_btn.add_css_class("action-button")
+        fav_btn.add_css_class("favorite-action")
+        fav_btn.set_cursor_from_name("pointer")
         fav_btn.connect("clicked", self._on_add_to_favorites, wallpaper)
         actions_box.append(fav_btn)
 
@@ -564,25 +518,6 @@ class WallhavenView(Adw.Bin):
                 self.view_model.notification_service.notify_error("Failed to add to favorites")
 
         self._run_async(add_to_favs())
-
-    def _get_category(self) -> str:
-        """Get selected category code"""
-        active = self.categories_combo.get_active()
-        categories = {"All": "111", "General": "100", "Anime": "010", "People": "001"}
-        return list(categories.values())[active]
-
-    def _get_sorting(self) -> str:
-        """Get selected sorting option"""
-        active = self.sorting_combo.get_active()
-        sortings = [
-            "date_added",
-            "relevance",
-            "random",
-            "views",
-            "favorites",
-            "toplist",
-        ]
-        return sortings[active]
 
     def update_pagination(self, current_page: int, total_pages: int):
         wallpaper_count = len(self.view_model.wallpapers)

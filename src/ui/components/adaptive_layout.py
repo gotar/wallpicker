@@ -4,7 +4,7 @@ import gi
 
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk  # noqa: E402
 
 
 class AdaptiveLayoutMixin:
@@ -37,7 +37,9 @@ class AdaptiveLayoutMixin:
         - Full (> 1400px): 6 columns (max)
         """
         # Breakpoint: Narrow (< 600px) - 2 columns, stacked filters
-        narrow_bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 600px"))
+        narrow_bp = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("max-width: 600px")
+        )
 
         def apply_narrow(*args):
             self.flow_box.set_max_children_per_line(2)
@@ -46,6 +48,7 @@ class AdaptiveLayoutMixin:
 
         def unapply_narrow(*args):
             self.flow_box.set_max_children_per_line(3)
+            self.flow_box.set_homogeneous(False)
             if hasattr(self, "filter_bar"):
                 self.filter_bar.set_orientation(Gtk.Orientation.HORIZONTAL)
 
@@ -54,7 +57,9 @@ class AdaptiveLayoutMixin:
         self.add_breakpoint(narrow_bp)
 
         # Breakpoint: Medium (600-900px) - 3 columns
-        medium_bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("min-width: 600px"))
+        medium_bp = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("min-width: 600px")
+        )
         medium_bp.set_condition(Adw.BreakpointCondition.parse("max-width: 900px"))
 
         def apply_medium(*args):
@@ -74,7 +79,9 @@ class AdaptiveLayoutMixin:
         self.add_breakpoint(wide_bp)
 
         # Breakpoint: Ultra-wide (1200-1400px) - 5 columns
-        ultra_bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("min-width: 1200px"))
+        ultra_bp = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("min-width: 1200px")
+        )
         ultra_bp.set_condition(Adw.BreakpointCondition.parse("max-width: 1400px"))
 
         def apply_ultra(*args):
@@ -102,7 +109,9 @@ class AdaptiveLayoutMixin:
 
         # Narrow screens: Filters stacked vertically below search
         # Wide screens: Filters horizontal
-        narrow_bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 900px"))
+        narrow_bp = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("max-width: 900px")
+        )
 
         def apply_narrow_filters(*args):
             if hasattr(self, "filter_bar"):

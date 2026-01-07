@@ -10,28 +10,33 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
+from ui.components.search_filter_bar import SearchFilterBar
 from ui.view_models.favorites_view_model import FavoritesViewModel
 
 
 class FavoritesView(Adw.Bin):
     """View for favorites wallpaper browsing with adaptive layout"""
 
-    def __init__(self, view_model: FavoritesViewModel, banner_service=None):
+    def __init__(
+        self,
+        view_model: FavoritesViewModel,
+        banner_service=None,
+        on_set_wallpaper=None,
+        on_remove_favorite=None,
+    ):
         super().__init__()
         self.view_model = view_model
         self.banner_service = banner_service
+        self.on_set_wallpaper = on_set_wallpaper
+        self.on_remove_favorite = on_remove_favorite
+        self.card_wallpaper_map = {}
         self._last_selected_wallpaper = None
-
-        self.set_sensitive(True)
-        self.set_can_focus(True)
-        self.set_focusable(True)
 
         self._create_ui()
 
         self._setup_keyboard_shortcuts()
-        self._setup_pull_to_refresh()
         self._bind_to_view_model()
 
     def _create_ui(self):
@@ -44,24 +49,22 @@ class FavoritesView(Adw.Bin):
         self._create_status_bar()
 
     def _create_toolbar(self):
-        self.toolbar = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=12,
+        toolbar_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        toolbar_wrapper.add_css_class("toolbar-wrapper")
+        self.main_box.append(toolbar_wrapper)
+
+        self.search_filter_bar = SearchFilterBar(
+            tab_type="favorites",
+            on_search_changed=self._on_search_changed,
         )
-        self.toolbar.add_css_class("filter-bar")
+        toolbar_wrapper.append(self.search_filter_bar)
 
         self.loading_spinner = Gtk.Spinner(spinning=False)
-        self.toolbar.append(self.loading_spinner)
+        toolbar_wrapper.append(self.loading_spinner)
 
-        spacer = Gtk.Label()
-        spacer.set_hexpand(True)
-        self.toolbar.append(spacer)
-
-        self.search_entry = Gtk.SearchEntry(placeholder_text="Search favorites...")
-        self.search_entry.connect("search-changed", self._on_search_changed)
-        self.toolbar.append(self.search_entry)
-
-        self.main_box.append(self.toolbar)
+    def _on_search_changed(self, search_text):
+        """Handle search text changes."""
+        self.view_model.search_query = search_text
 
     def _create_wallpapers_grid(self):
         """Create wallpapers grid display"""
@@ -157,9 +160,6 @@ class FavoritesView(Adw.Bin):
         # Escape: Clear selection and remove focus
         elif keyval == Gdk.KEY_Escape:
             self.view_model.clear_selection()
-            focused = self.wallpapers_grid.get_focus_child()
-            if focused:
-                focused.grab_remove()
             return True
         return False
 
@@ -258,20 +258,6 @@ class FavoritesView(Adw.Bin):
             break
         self.view_model.clear_selection()
 
-    def _on_search_changed(self, entry):
-        """Handle search entry changes"""
-        # Debounce search to avoid excessive filtering
-        if self._search_timer:
-            GObject.source_remove(self._search_timer)
-
-        self._search_timer = GObject.timeout_add(300, self._perform_search)
-
-    def _perform_search(self):
-        """Perform search with debouncing"""
-        self.view_model.search_query = self.search_entry.get_text()
-        self._search_timer = None
-        return False
-
     def _on_favorites_changed(self, *args):
         """Handle favorites list changes"""
         self.update_wallpapers_grid()
@@ -343,38 +329,61 @@ class FavoritesView(Adw.Bin):
 
         self.view_model.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
 
-        overlay = Gtk.Overlay()
-        overlay.set_child(image)
+        card.append(image)
 
-        checkbox = Gtk.CheckButton()
-        checkbox.add_css_class("selection-checkbox")
-        checkbox.set_halign(Gtk.Align.START)
-        checkbox.set_valign(Gtk.Align.START)
-        checkbox.set_margin_start(8)
-        checkbox.set_margin_top(8)
-        checkbox.set_active(is_selected)
-        if self.view_model.selection_mode:
-            checkbox.set_visible(True)
-        else:
-            checkbox.set_visible(False)
-        checkbox.connect(
-            "toggled", lambda cb: self._on_selection_toggled(wallpaper, cb.get_active())
+        # Info box with filename and metadata
+        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        info_box.add_css_class("card-info-box")
+
+        # Filename
+        filename_label = Gtk.Label()
+        filename_label.set_ellipsize(Pango.EllipsizeMode.END)
+        filename_label.set_lines(1)
+        filename_label.set_max_width_chars(25)
+        filename_label.set_text(
+            Path(wallpaper.path).name if hasattr(wallpaper, "path") else wallpaper.filename
         )
-        overlay.add_overlay(checkbox)
+        filename_label.add_css_class("filename-label")
+        info_box.append(filename_label)
 
-        card.append(overlay)
+        metadata_label = Gtk.Label()
+        metadata_parts = []
 
+        if hasattr(wallpaper, "resolution") and wallpaper.resolution:
+            metadata_parts.append(str(wallpaper.resolution))
+
+        if hasattr(wallpaper, "file_size") and wallpaper.file_size:
+            size = wallpaper.file_size
+            if size >= 1024 * 1024:
+                size_str = f"{size / (1024 * 1024):.1f} MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+            metadata_parts.append(size_str)
+
+        metadata_label.set_text(" • ".join(metadata_parts) if metadata_parts else "")
+        metadata_label.add_css_class("metadata-label")
+        info_box.append(metadata_label)
+
+        card.append(info_box)
+
+        # Actions box
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
-        actions_box.set_homogeneous(True)
 
         set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
+        set_btn.add_css_class("suggested-action")
+        set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, favorite)
         actions_box.append(set_btn)
 
         remove_btn = Gtk.Button(icon_name="user-trash-symbolic", tooltip_text="Remove")
+        remove_btn.add_css_class("action-button")
         remove_btn.add_css_class("destructive-action")
+        remove_btn.set_cursor_from_name("pointer")
         remove_btn.connect("clicked", self._on_remove_favorite, favorite)
         actions_box.append(remove_btn)
 
@@ -398,14 +407,18 @@ class FavoritesView(Adw.Bin):
         """Handle set wallpaper button click"""
         self.view_model.set_wallpaper(favorite)
 
+    def _on_search_changed(self, search_text):
+        """Handle search text changes."""
+        self.view_model.search_query = search_text
+
     def _on_remove_favorite(self, button, favorite):
-        """Handle remove button click"""
         window = self.get_root()
 
         dialog = Adw.MessageDialog(
             transient_for=window,
-            heading="Remove from favorites?",
-            body=f"Are you sure you want to remove '{Path(favorite.wallpaper.path).name}' from favorites?",
+            modal=True,
+            heading="Remove favorite?",
+            body=f"Are you sure you want to remove '{favorite.wallpaper.id}' from favorites?",
         )
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("remove", "Remove")
@@ -416,6 +429,7 @@ class FavoritesView(Adw.Bin):
         def on_response(dialog, response):
             if response == "remove":
                 self.view_model.remove_favorite(favorite.wallpaper_id)
+            dialog.destroy()
 
         dialog.connect("response", on_response)
         dialog.present()

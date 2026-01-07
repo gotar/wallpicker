@@ -1,9 +1,20 @@
 """Base ViewModel for UI state management."""
 
-from collections.abc import Callable
+import asyncio
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Callable
 
-from gi.repository import Gdk, GdkPixbuf, GObject, GLib
+import aiohttp
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("GLib", "2.0")
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from gi.repository import Gdk, GLib, GObject  # noqa: E402
 
 
 class BaseViewModel(GObject.Object):
@@ -21,12 +32,13 @@ class BaseViewModel(GObject.Object):
     selected_count = GObject.Property(type=int, default=0)
     selected_wallpapers = GObject.Property(type=object)
 
-    def __init__(self) -> None:
+    def __init__(self, thumbnail_cache=None) -> None:
         super().__init__()
         self._is_busy = False
         self._error_message: str | None = None
         self._executor = ThreadPoolExecutor(max_workers=4)
         self._selected_wallpapers_list = []
+        self._thumbnail_cache = thumbnail_cache
 
     def bind_property(
         self,
@@ -49,12 +61,48 @@ class BaseViewModel(GObject.Object):
         return GObject.Object.bind_property(self, prop_name, widget, widget_prop, flags)
 
     def emit_property_changed(self, prop_name: str) -> None:
-        """Emit notify signal for property.
+        """Emit notify signal for property change.
 
         Args:
-            prop_name: Property name to emit notification for
+            prop_name: Name of property that changed
         """
         self.notify(prop_name)
+
+    def clear_error(self) -> None:
+        """Clear error message."""
+        self.error_message = None
+
+    def _update_selection_state(self) -> None:
+        self.selected_wallpapers = self._selected_wallpapers_list
+        self.selected_count = len(self._selected_wallpapers_list)
+        self.selection_mode = self.selected_count > 0
+
+    def toggle_selection(self, wallpaper) -> None:
+        """Toggle wallpaper selection."""
+        if wallpaper in self._selected_wallpapers_list:
+            self._selected_wallpapers_list.remove(wallpaper)
+        else:
+            self._selected_wallpapers_list.append(wallpaper)
+        self._update_selection_state()
+
+    def select_all(self) -> None:
+        """Select all wallpapers."""
+        # Subclasses should override this with their wallpaper list
+        pass
+
+    def deselect_all(self) -> None:
+        """Deselect all wallpapers."""
+        self._selected_wallpapers_list.clear()
+        self._update_selection_state()
+
+    def clear_selection(self) -> None:
+        """Clear selection and exit selection mode."""
+        self.deselect_all()
+        self.selection_mode = False
+
+    def get_selected_wallpapers(self) -> list:
+        """Get list of selected wallpapers."""
+        return self._selected_wallpapers_list.copy()
 
     def load_thumbnail_async(
         self, path_or_url: str, callback: Callable[[Gdk.Texture | None], None]
@@ -68,72 +116,33 @@ class BaseViewModel(GObject.Object):
 
         def _load_thumbnail():
             try:
-                # Check if it's a URL
-                if path_or_url.startswith(("http://", "https://")):
-                    import requests
-                    from io import BytesIO
+                if path_or_url.startswith(("http://", "https://")) and self._thumbnail_cache:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        thumbnail_path = loop.run_until_complete(
+                            self._thumbnail_cache.get_or_download(
+                                path_or_url, aiohttp.ClientSession()
+                            )
+                        )
+                        if thumbnail_path and thumbnail_path.exists():
+                            texture = Gdk.Texture.new_from_filename(str(thumbnail_path))
+                            GLib.idle_add(lambda: callback(texture))
+                            return
+                    finally:
+                        loop.close()
 
-                    response = requests.get(path_or_url, timeout=10)
-                    response.raise_for_status()
+                path = Path(path_or_url)
+                if path.exists():
+                    texture = Gdk.Texture.new_from_filename(str(path))
+                    GLib.idle_add(lambda: callback(texture))
+                    return
+            except Exception:
+                pass
 
-                    loader = GdkPixbuf.PixbufLoader()
-                    loader.write(response.content)
-                    loader.close()
-                    pixbuf = loader.get_pixbuf()
-
-                    # Scale the pixbuf
-                    if pixbuf:
-                        pixbuf = pixbuf.scale_simple(220, 160, GdkPixbuf.InterpType.BILINEAR)
-                else:
-                    # Local file
-                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                        str(path_or_url), 220, 160, True
-                    )
-
-                if pixbuf:
-                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                    GLib.idle_add(lambda: callback(texture) or False)
-                else:
-                    GLib.idle_add(lambda: callback(None) or False)
-            except Exception as e:
-                print(f"Failed to load thumbnail for {path_or_url}: {e}")
-                GLib.idle_add(lambda: callback(None) or False)
+            GLib.idle_add(lambda: callback(None))
 
         self._executor.submit(_load_thumbnail)
-
-    def clear_error(self) -> None:
-        """Clear error message"""
-        self.error_message = None
-
-    def toggle_selection(self, wallpaper) -> None:
-        if wallpaper in self._selected_wallpapers_list:
-            self._selected_wallpapers_list.remove(wallpaper)
-        else:
-            self._selected_wallpapers_list.append(wallpaper)
-        self._update_selection_state()
-
-    def select_all(self) -> None:
-        if hasattr(self, "wallpapers") or hasattr(self, "favorites"):
-            wallpapers_list = getattr(self, "wallpapers", getattr(self, "favorites", []))
-            self._selected_wallpapers_list = list(wallpapers_list)
-            self._update_selection_state()
-
-    def deselect_all(self) -> None:
-        self._selected_wallpapers_list = []
-        self._update_selection_state()
-
-    def clear_selection(self) -> None:
-        self.deselect_all()
-        self.selection_mode = False
-
-    def get_selected_wallpapers(self) -> list:
-        return self._selected_wallpapers_list.copy()
-
-    def _update_selection_state(self) -> None:
-        self.selected_wallpapers = self._selected_wallpapers_list
-        self.selected_count = len(self._selected_wallpapers_list)
-        if self.selected_count > 0:
-            self.selection_mode = True
 
     def __del__(self) -> None:
         if hasattr(self, "_executor"):

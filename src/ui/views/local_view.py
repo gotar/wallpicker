@@ -10,18 +10,27 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, GObject, Gtk
+from gi.repository import Adw, Gdk, GObject, Gtk, Pango  # noqa: E402
 
+from ui.components.search_filter_bar import SearchFilterBar
 from ui.view_models.local_view_model import LocalViewModel
 
 
 class LocalView(Adw.BreakpointBin):
     """View for local wallpaper browsing with adaptive layout"""
 
-    def __init__(self, view_model: LocalViewModel, banner_service=None):
+    def __init__(
+        self,
+        view_model: LocalViewModel,
+        banner_service=None,
+        on_set_wallpaper=None,
+        on_delete=None,
+    ):
         super().__init__()
         self.view_model = view_model
         self.banner_service = banner_service
+        self.on_set_wallpaper = on_set_wallpaper
+        self.on_delete = on_delete
         self._last_selected_wallpaper = None
 
         self._create_ui()
@@ -34,39 +43,38 @@ class LocalView(Adw.BreakpointBin):
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.set_child(self.main_box)
 
-        self._create_toolbar()
+        self._create_filter_bar()
         self._create_wallpaper_grid()
         self._create_status_bar()
 
-    def _create_toolbar(self):
-        """Create toolbar with actions"""
-        self.toolbar = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=12,
-        )
-        self.toolbar.add_css_class("filter-bar")
+    def _create_filter_bar(self):
+        """Create unified filter bar for local wallpapers"""
+        toolbar_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        toolbar_wrapper.add_css_class("toolbar-wrapper")
+        self.main_box.append(toolbar_wrapper)
 
-        # Folder button
         folder_btn = Gtk.Button(icon_name="folder-symbolic", tooltip_text="Choose folder")
         folder_btn.connect("clicked", self._on_folder_clicked)
-        self.toolbar.append(folder_btn)
+        toolbar_wrapper.append(folder_btn)
 
-        # Loading spinner
+        self.search_filter_bar = SearchFilterBar(
+            tab_type="local",
+            on_search_changed=self._on_search_changed,
+            on_sort_changed=self._on_sort_changed,
+        )
+        toolbar_wrapper.append(self.search_filter_bar)
+
         self.loading_spinner = Gtk.Spinner(spinning=False)
-        self.toolbar.append(self.loading_spinner)
+        toolbar_wrapper.append(self.loading_spinner)
 
-        # Spacer
-        spacer = Gtk.Label()
-        spacer.set_hexpand(True)
-        self.toolbar.append(spacer)
+    def _on_search_changed(self, text: str):
+        self.view_model.search_query = text
 
-        # Error label
-        self.error_label = Gtk.Label(wrap=True)
-        self.error_label.add_css_class("error")
-        self.error_label.set_visible(False)
-        self.toolbar.append(self.error_label)
-
-        self.main_box.append(self.toolbar)
+    def _on_sort_changed(self, sorting: str):
+        if sorting == "name":
+            self.view_model.sort_by_name()
+        elif sorting == "date":
+            self.view_model.sort_by_date()
 
     def update_status(self, count: int):
         self.status_label.set_text(f"{count} wallpapers")
@@ -235,7 +243,7 @@ class LocalView(Adw.BreakpointBin):
             self.view_model.refresh_wallpapers()
 
             # Reset flag after a delay
-            from gi.repository import GLib
+            from gi.repository import GLib  # noqa: E402
 
             GLib.timeout_add(1000, self._reset_refresh_flag)
 
@@ -324,50 +332,70 @@ class LocalView(Adw.BreakpointBin):
             if texture:
                 image.set_paintable(texture)
 
-        self.view_model.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
+        thumb_path = str(wallpaper.path)
+        self.view_model.load_thumbnail_async(thumb_path, on_thumbnail_loaded)
 
-        overlay = Gtk.Overlay()
-        overlay.set_child(image)
+        card.append(image)
 
-        checkbox = Gtk.CheckButton()
-        checkbox.add_css_class("selection-checkbox")
-        checkbox.set_halign(Gtk.Align.START)
-        checkbox.set_valign(Gtk.Align.START)
-        checkbox.set_margin_start(8)
-        checkbox.set_margin_top(8)
-        checkbox.set_active(is_selected)
-        if self.view_model.selection_mode:
-            checkbox.set_visible(True)
-        else:
-            checkbox.set_visible(False)
-        checkbox.connect(
-            "toggled", lambda cb: self._on_selection_toggled(wallpaper, cb.get_active())
-        )
-        overlay.add_overlay(checkbox)
+        # Info box with filename and metadata
+        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        info_box.add_css_class("card-info-box")
 
-        card.append(overlay)
+        # Filename
+        filename_label = Gtk.Label()
+        filename_label.set_ellipsize(Pango.EllipsizeMode.END)
+        filename_label.set_lines(1)
+        filename_label.set_max_width_chars(25)
+        filename_label.set_text(wallpaper.filename)
+        filename_label.add_css_class("filename-label")
+        info_box.append(filename_label)
 
-        click = Gtk.GestureClick()
-        click.set_button(1)
-        click.connect("pressed", self._on_card_clicked, wallpaper, card, checkbox)
-        card.add_controller(click)
+        # Metadata (resolution • size • aspect ratio)
+        metadata_label = Gtk.Label()
+        metadata_parts = []
 
+        if wallpaper.resolution:
+            metadata_parts.append(wallpaper.resolution)
+
+        if wallpaper.size:
+            size = wallpaper.size
+            if size >= 1024 * 1024:
+                size_str = f"{size / (1024 * 1024):.1f} MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+            metadata_parts.append(size_str)
+
+        metadata_label.set_text(" • ".join(metadata_parts) if metadata_parts else "")
+        metadata_label.add_css_class("metadata-label")
+        info_box.append(metadata_label)
+
+        card.append(info_box)
+
+        # Actions box
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
-        actions_box.set_homogeneous(True)
 
         set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
+        set_btn.add_css_class("suggested-action")
+        set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
         fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
         fav_btn.add_css_class("action-button")
+        fav_btn.add_css_class("favorite-action")
+        fav_btn.set_cursor_from_name("pointer")
         fav_btn.connect("clicked", self._on_add_to_favorites, wallpaper)
         actions_box.append(fav_btn)
 
         delete_btn = Gtk.Button(icon_name="user-trash-symbolic", tooltip_text="Delete")
+        delete_btn.add_css_class("action-button")
         delete_btn.add_css_class("destructive-action")
+        delete_btn.set_cursor_from_name("pointer")
         delete_btn.connect("clicked", self._on_delete_wallpaper, wallpaper)
         actions_box.append(delete_btn)
 
@@ -389,10 +417,6 @@ class LocalView(Adw.BreakpointBin):
         result = self.view_model.wallpaper_setter.set_wallpaper(str(wallpaper.path))
         if not result:
             self.error_message = "Failed to set wallpaper"
-
-    def _on_card_double_clicked(self, gesture, n_press, x, y, wallpaper):
-        if n_press >= 2:  # Only trigger on double-click
-            self._on_set_wallpaper(None, wallpaper)
 
     def _on_add_to_favorites(self, button, wallpaper):
         self.view_model.add_to_favorites(wallpaper)

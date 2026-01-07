@@ -5,7 +5,9 @@ from pathlib import Path
 class WallpaperSetter:
     def __init__(self):
         self.cache_dir = Path.home() / ".cache" / "wallpaper"
-        self.symlink_path = Path.home() / ".config" / "omarchy" / "current" / "background"
+        self.symlink_path = (
+            Path.home() / ".config" / "omarchy" / "current" / "background"
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symlink_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -74,6 +76,6 @@ class WallpaperSetter:
                 target = self.symlink_path.resolve()
                 if target.exists():
                     return str(target)
-            except:
+            except Exception:
                 pass
         return None

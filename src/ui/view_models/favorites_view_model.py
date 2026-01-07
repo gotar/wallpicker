@@ -7,9 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from gi.repository import GObject  # noqa: E402
+
 from domain.favorite import Favorite
 from domain.wallpaper import Wallpaper
-from gi.repository import GObject
 from services.favorites_service import FavoritesService
 from services.wallpaper_setter import WallpaperSetter
 from ui.view_models.base import BaseViewModel
@@ -22,18 +23,17 @@ class FavoritesViewModel(BaseViewModel):
         self,
         favorites_service: FavoritesService,
         wallpaper_setter: WallpaperSetter,
+        thumbnail_cache=None,
     ) -> None:
-        super().__init__()
+        super().__init__(thumbnail_cache=thumbnail_cache)
         self.favorites_service = favorites_service
         self.wallpaper_setter = wallpaper_setter
 
-        # Observable state
         self._favorites: list[Wallpaper] = []
-        self.search_query = ""
+        self._search_query: str = ""
 
     @GObject.Property(type=object)
     def favorites(self) -> list[Wallpaper]:
-        """Favorites list property"""
         return self._favorites
 
     @favorites.setter
@@ -41,8 +41,16 @@ class FavoritesViewModel(BaseViewModel):
         self._favorites = value
         self.notify("favorites")
 
+    @GObject.Property(type=str)
+    def search_query(self) -> str:
+        return self._search_query
+
+    @search_query.setter
+    def search_query(self, value: str) -> None:
+        self._search_query = value
+        self.search_favorites(value)
+
     def load_favorites(self) -> None:
-        """Load all favorites"""
         try:
             self.is_busy = True
             self.error_message = None
@@ -57,14 +65,12 @@ class FavoritesViewModel(BaseViewModel):
             self.is_busy = False
 
     def search_favorites(self, query: str = "") -> None:
-        """Search favorites"""
         try:
             self.is_busy = True
             self.error_message = None
-            self.search_query = query
+            self._search_query = query
 
             if not query or query.strip() == "":
-                # Load all favorites if query is empty
                 self.load_favorites()
             else:
                 results = self.favorites_service.search_favorites(query)
@@ -84,15 +90,16 @@ class FavoritesViewModel(BaseViewModel):
         source: str,
         tags: str,
     ) -> bool:
-        """Add wallpaper to favorites"""
         try:
             self.is_busy = True
             self.error_message = None
 
-            # Create wallpaper object for service
-            from domain.wallpaper import Wallpaper, WallpaperSource, Resolution
+            if self.is_favorite(wallpaper_id):
+                self._show_toast("Already in favorites", "warning")
+                return False
 
-            # Convert source string to enum if needed
+            from domain.wallpaper import Resolution, Wallpaper, WallpaperSource
+
             source_enum = source
             if isinstance(source, str):
                 if source == "local":
@@ -115,34 +122,32 @@ class FavoritesViewModel(BaseViewModel):
             )
 
             self.favorites_service.add_favorite(wallpaper)
-
-            # Reload favorites to get updated list
             self.load_favorites()
+            self._show_toast("Added to favorites", "success")
 
             return True
 
         except Exception as e:
             self.error_message = f"Failed to add favorite: {e}"
+            self._show_toast(f"Failed to add favorite: {e}", "error")
             return False
         finally:
             self.is_busy = False
 
     def remove_favorite(self, wallpaper_id: str) -> bool:
-        """Remove wallpaper from favorites"""
         try:
             self.is_busy = True
             self.error_message = None
 
-            result = self.favorites_service.remove_favorite(wallpaper_id)
+            self.favorites_service.remove_favorite(wallpaper_id)
+            self.load_favorites()
+            self._show_toast("Removed from favorites", "success")
 
-            if result:
-                # Reload favorites from disk to ensure UI updates (same as tab switch)
-                self.load_favorites()
-
-            return result
+            return True
 
         except Exception as e:
             self.error_message = f"Failed to remove favorite: {e}"
+            self._show_toast(f"Failed to remove favorite: {e}", "error")
             return False
         finally:
             self.is_busy = False
@@ -156,32 +161,50 @@ class FavoritesViewModel(BaseViewModel):
 
             if result:
                 self.emit("wallpaper-set", favorite.wallpaper.name)
+                self._show_toast("Wallpaper set successfully", "success")
 
             return result
 
         except Exception as e:
             self.error_message = f"Failed to set wallpaper: {e}"
+            self._show_toast(f"Failed to set wallpaper: {e}", "error")
             return False
         finally:
             self.is_busy = False
 
     def is_favorite(self, wallpaper_id: str) -> bool:
-        """Check if wallpaper is in favorites"""
         result = self.favorites_service.is_favorite(wallpaper_id)
         return result if result is not None else False
 
     def get_favorite(self, wallpaper_id: str) -> Favorite:
-        """Get favorite by wallpaper ID"""
         favorite = self.favorites_service.is_favorite(wallpaper_id)
         if not favorite:
             raise ValueError(f"Wallpaper {wallpaper_id} not in favorites")
-        # Find favorite in favorites list
         for fav in self.favorites:
             if fav.wallpaper_id == wallpaper_id:
                 return fav
         raise ValueError(f"Wallpaper {wallpaper_id} not in favorites list")
 
     def refresh_favorites(self) -> None:
-        """Refresh favorites list"""
         self.search_query = ""
         self.load_favorites()
+
+    def select_all(self) -> None:
+        """Select all favorites."""
+        self._selected_wallpapers_list = self.favorites.copy()
+        self._update_selection_state()
+
+    def _show_toast(self, message: str, msg_type: str = "info"):
+        try:
+            window = self.get_root()
+            if window and hasattr(window, "toast_service"):
+                if msg_type == "success":
+                    window.toast_service.show_success(message)
+                elif msg_type == "error":
+                    window.toast_service.show_error(message)
+                elif msg_type == "warning":
+                    window.toast_service.show_warning(message)
+                else:
+                    window.toast_service.show_info(message)
+        except Exception:
+            pass

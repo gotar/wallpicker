@@ -9,58 +9,58 @@
     --spacing-2xl: 32px;
 }
 
-/* Wallpaper Cards - v1.1.1 Style */
+/* Wallpaper Cards - Modern Card-Based UI */
 .wallpaper-card {
+    background-color: @card_bg_color;
     border-radius: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid @borders;
     padding: 8px;
-    margin: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: box-shadow 0.2s, border-color 0.2s;
+    margin: 0;
+    box-shadow: 0 2px 4px alpha(@window_fg_color, 0.1),
+                0 1px 2px alpha(@window_fg_color, 0.08);
 }
 
 .wallpaper-card:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    border-color: rgba(0, 0, 0, 0.25);
+    box-shadow: 0 6px 16px alpha(@window_fg_color, 0.15),
+                0 3px 6px alpha(@window_fg_color, 0.12);
+    border-color: alpha(@window_fg_color, 0.25);
+    background-color: alpha(@window_bg_color, 0.05);
 }
 
 .wallpaper-card.selected {
     border: 2px solid @accent_bg_color;
-    box-shadow: 0 0 0 4px @accent_color;
+    background-color: alpha(@accent_bg_color, 0.08);
+    box-shadow: 0 0 0 4px alpha(@accent_bg_color, 0.2);
 }
 
-.wallpaper-card.current-wallpaper {
-    border: 3px solid #4caf50;
+.wallpaper-card.current {
+    border: 2px solid @success_bg_color;
+    background-color: alpha(@success_bg_color, 0.08);
 }
 
-.wallpaper-card.current-wallpaper::after {
-    content: "✓";
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 24px;
-    height: 24px;
-    background: #4caf50;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 14px;
+
+.wallpaper-card:focus:focus-visible {
+    outline: 3px solid @accent_bg_color;
+    outline-offset: 3px;
 }
 
-/* Selection Checkbox */
+*:focus:focus-visible {
+    outline: 3px solid @accent_bg_color;
+    outline-offset: 3px;
+}
+
+.wallpaper-thumb {
+    border-radius: 8px;
+}
+
 .wallpaper-card .selection-checkbox {
     min-width: 20px;
     min-height: 20px;
     margin: 8px;
-    background-color: alpha(@window_bg_color, 0.9);
+    background-color: alpha(@window_bg_color, 0.95);
     border: 2px solid @window_fg_color;
     border-radius: 4px;
     opacity: 0;
-    transition: opacity 0.15s ease;
 }
 
 .wallpaper-card.selection-mode .selection-checkbox {
@@ -77,32 +77,46 @@
     background-color: alpha(@window_fg_color, 0.1);
 }
 
-.wallpaper-card:focus:focus-visible {
-    outline: 3px solid @accent_bg_color;
-    outline-offset: 3px;
+.wallpaper-card overlay {
+    padding: var(--spacing-sm);
 }
 
-*:focus:focus-visible {
-    outline: 3px solid @accent_bg_color;
-    outline-offset: 3px;
+.wallpaper-card .card-info-box {
+    padding: 2px 8px;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 
-.wallpaper-thumb {
-    object-fit: fill;
-    max-width: 180px;
-    max-height: 180px;
-    border-radius: 8px;
+.wallpaper-card .card-actions-box {
+    padding: 2px 8px;
+    padding-bottom: 6px;
+}
+
+.wallpaper-card .filename-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: @window_fg_color;
+    min-height: 1.25rem;
+    line-height: 1.4;
+}
+
+.wallpaper-card .caption {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: @dim_label_color;
+    min-height: 1.1rem;
+    line-height: 1.3;
 }
 
 /* Action Buttons - v1.1.1 Style */
 .action-button {
-    min-width: 80px;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 10px;
     background: rgba(0, 0, 0, 0.1);
     color: white;
-    transition: background 0.15s;
 }
 
 .action-button:hover {
@@ -116,6 +130,36 @@
 
 .action-button.suggested-action:hover {
     background: shade(@accent_bg_color, 1.1);
+}
+
+/* Favorite button - yellow/orange */
+.action-button.favorite-action {
+    background: #f6c842;
+    color: #2a2a2a;
+}
+
+.action-button.favorite-action:hover {
+    background: #ffd666;
+}
+
+/* Download button - green */
+.action-button.download-action {
+    background: #2ec27e;
+    color: white;
+}
+
+.action-button.download-action:hover {
+    background: #33d17a;
+}
+
+/* Info button - gray */
+.action-button.info-action {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.action-button.info-action:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 
 .destructive-action {
@@ -137,27 +181,40 @@
     margin: 12px;
 }
 
-/* Filter Bar - v1.1.1 Style */
-.filter-bar {
-    padding: 12px;
-}
 
 /* Search Filter Bar */
-.search-filter-bar {
+.search-filter-bar,
+.filter-bar {
     padding: 12px 16px;
     background: alpha(@window_bg_color, 0.8);
     border-bottom: 1px solid alpha(@window_fg_color, 0.08);
 }
 
-.search-filter-bar Gtk.SearchEntry {
+.search-filter-bar Gtk.SearchEntry,
+.filter-bar Gtk.SearchEntry {
     border-radius: 8px;
     min-height: 36px;
 }
 
-.search-filter-bar Gtk.DropDown {
+.search-filter-bar Gtk.DropDown,
+.filter-bar Gtk.DropDown {
     border-radius: 8px;
     min-height: 36px;
     min-width: 140px;
+}
+
+/* View Switcher Bar */
+.view-switcher-bar {
+    padding: 8px 16px;
+    background: alpha(@window_bg_color, 0.9);
+    border-top: 1px solid alpha(@window_fg_color, 0.06);
+}
+
+/* Toolbar Wrapper - consistent layout across all tabs */
+.toolbar-wrapper {
+    padding: 8px 12px;
+    background: alpha(@window_bg_color, 0.9);
+    border-bottom: 1px solid alpha(@window_fg_color, 0.06);
 }
 
 /* Filter Chips */
@@ -172,18 +229,6 @@
     border: 1px solid alpha(@accent_bg_color, 0.3);
     border-radius: 18px;
     padding: 4px 12px;
-    transition: all 0.2s ease;
-}
-
-.filter-chip.chip-removing {
-    animation: chip-remove 0.2s ease-in forwards;
-}
-
-@keyframes chip-remove {
-    to {
-        transform: scale(0.5);
-        opacity: 0;
-    }
 }
 
 .filter-chip:hover {
@@ -218,13 +263,11 @@
 /* Filter Panel */
 .filter-panel {
     min-width: 320px;
-    max-width: 400px;
 }
 
 .filter-panel .heading {
     font-size: 11px;
     font-weight: 600;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
     color: @dim_label_color;
     margin-bottom: 8px;
@@ -245,26 +288,7 @@
     min-height: 36px;
 }
 
-/* Responsive adjustments */
-@media (max-width: 900px) {
-    .search-filter-bar {
-        flex-wrap: wrap;
-    }
 
-    .search-filter-bar Gtk.SearchEntry {
-        width: 100%;
-        order: 1;
-    }
-
-    .search-filter-bar Gtk.DropDown {
-        flex: 1;
-        min-width: 120px;
-    }
-
-    .filter-chips {
-        flex-wrap: wrap;
-    }
-}
 
 /* Status Bar - v1.1.1 Style */
 .status-bar {
@@ -285,141 +309,45 @@
     color: @dim_label_color;
 }
 
-/* Responsive Grid Adjustments */
-@media (max-width: 600px) {
-    .wallpaper-thumb {
-        max-width: 100%;
-        max-height: 140px;
-    }
 
-    .action-button {
-        min-width: 60px;
-        font-size: 11px;
-        padding: 4px 8px;
-    }
-}
 
-/* Dark mode enhancements */
 .dark .wallpaper-card {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
 .dark .wallpaper-card:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* ViewSwitcherBar auto-hide on wide screens */
-.auto-hide-wide {
-    opacity: 1;
-    transition: opacity 0.3s ease;
+.dark .wallpaper-card .filename-label {
+    color: rgba(255, 255, 255, 0.9);
 }
 
-@media (min-width: 700px) {
-    .auto-hide-wide {
-        opacity: 0;
-    }
+.dark .wallpaper-card .caption {
+    color: rgba(255, 255, 255, 0.6);
 }
 
-/* Adaptive Layout Media Queries */
 
-/* Narrow screens (< 600px) */
-@media (max-width: 600px) {
-    .wallpaper-card {
-        width: 100%;
-        min-width: unset;
-        padding: 8px;
-    }
 
-    .wallpaper-thumb {
-        max-width: 100%;
-        max-height: 140px;
-    }
 
-    .filter-bar {
-        flex-wrap: wrap;
-    }
 
-    .action-button {
-        min-width: 60px;
-        font-size: 11px;
-        padding: 4px 8px;
-    }
-}
 
-/* Medium screens (600-900px) */
-@media (min-width: 600px) and (max-width: 900px) {
-    .wallpaper-card {
-        width: 280px;
-    }
 
-    .wallpaper-thumb {
-        max-height: 180px;
-    }
-}
 
-/* Wide screens (900-1200px) */
-@media (min-width: 900px) and (max-width: 1200px) {
-    .wallpaper-card {
-        width: 280px;
-    }
 
-    .wallpaper-thumb {
-        max-height: 200px;
-    }
 
-    .filter-bar {
-        flex-wrap: nowrap;
-    }
-}
-
-/* Ultra-wide screens (> 1200px) */
-@media (min-width: 1200px) {
-    .wallpaper-card {
-        width: 280px;
-    }
-
-    .wallpaper-thumb {
-        max-height: 220px;
-    }
-
-    .filter-bar {
-        flex-wrap: nowrap;
-    }
-}
-
-/* Filter bar orientation adaptation */
-@media (max-width: 900px) {
-    .filter-bar.vertical {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .filter-bar.vertical > * {
-        width: 100%;
-        margin-bottom: 8px;
-    }
-
-    .filter-bar.vertical Gtk.Entry,
-    .filter-bar.vertical Gtk.SearchEntry {
-        width: 100%;
-    }
-}
 
 /* Banner Styles */
 .banner {
     font-size: 13px;
     border-radius: 0;
-    transition: max-height 0.3s ease, opacity 0.3s ease,
-                transform 0.3s ease;
-    max-height: 0;
     opacity: 0;
-    transform: translateY(-20px);
 }
 
 .banner.visible {
-    max-height: 100px;
     opacity: 1;
-    transform: translateY(0);
 }
 
 .banner.warning-banner {
@@ -476,10 +404,6 @@
     background-color: shade(@accent_bg_color, 1.1);
 }
 
-/* Banner container for ToolbarView integration */
-.banner-container {
-    border-bottom: 1px solid alpha(@window_fg_color, 0.1);
-}
 
 /* Preview Dialog Styles */
 .preview-dialog {
@@ -502,12 +426,10 @@
 
 .preview-sidebar {
     min-width: 300px;
-    max-width: 400px;
     padding: 24px;
 }
 
 .preview-sidebar Adw.PreferencesGroup {
-    margin-bottom: 12px;
 }
 
 /* Large pill buttons */
@@ -518,37 +440,13 @@
     font-size: 14px;
 }
 
-/* Responsive adjustments for preview dialog */
-@media (max-width: 900px) {
-    .preview-dialog {
-        presentation-mode: bottom-sheet;
-    }
 
-    .preview-image-container {
-        padding: 12px;
-    }
-
-    .preview-sidebar {
-        min-width: 100%;
-        max-width: 100%;
-    }
-}
 
 /* Dark mode preview dialog */
 .dark .preview-image-container {
     background: #1a1a1a;
 }
 
-/* Current Wallpaper Thumbnail in Header Bar */
-.current-wallpaper-thumbnail {
-    padding: 4px;
-    margin-right: 8px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    cursor: pointer;
-    transition: all 0.2s;
-}
 
 .current-wallpaper-thumbnail:hover {
     background: rgba(0, 0, 0, 0.15);
@@ -560,75 +458,20 @@
 }
 
 .current-thumb.thumbnail-updated {
-    animation: thumbnail-pop 0.3s ease-out;
-}
-
-@keyframes thumbnail-pop {
-    0% {
-        transform: scale(1.0);
-        opacity: 1;
-    }
-    50% {
-        transform: scale(1.1);
-        opacity: 0.8;
-    }
-    100% {
-        transform: scale(1.0);
-        opacity: 1;
-    }
 }
 
 .current-thumb.missing-thumb {
     opacity: 0.5;
     background: alpha(@warning_color, 0.1);
 }
-
-/* Touch-Friendly Button Sizes */
-.action-button {
-    min-height: 44px;
-    min-width: 88px;
-    padding: 12px 16px;
-    transition: background 0.15s;
-}
-
-.fav-btn {
-    min-width: 44px;
-    min-height: 44px;
-}
-
-.wallpaper-thumb {
-    min-width: 200px;
-    min-height: 200px;
-}
+/* Touch-Friendly Button Sizes - Using smaller 24px size for better UX */
 
 /* Touch feedback for buttons */
 .action-button:active {
-    transform: scale(0.95);
-    transition: transform 0.1s ease;
 }
 
-/* Swipe indicator */
-.swipe-indicator {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: @accent_bg_color;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
 
-.swipe-indicator.active {
-    opacity: 1;
-}
 
-/* Pull-to-refresh spinner */
-.refresh-spinner {
-    padding: 16px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
 
 .refresh-spinner.active {
     opacity: 1;
@@ -636,92 +479,19 @@
 
 /* Touch feedback overlay */
 .touch-feedback {
-    transition: transform 0.1s ease, opacity 0.1s ease;
 }
 
 .touch-feedback:active {
-    transform: scale(0.98);
     opacity: 0.8;
 }
 
-/* Zoom levels for preview dialog */
-.zoom-100 { transform: scale(1.0); }
-.zoom-125 { transform: scale(1.25); }
-.zoom-150 { transform: scale(1.5); }
-.zoom-175 { transform: scale(1.75); }
-.zoom-200 { transform: scale(2.0); }
-.zoom-250 { transform: scale(2.5); }
-.zoom-300 { transform: scale(3.0); }
-.zoom-400 { transform: scale(4.0); }
-.zoom-500 { transform: scale(5.0); }
 
-/* Adw.Clamp Styling */
-clamp {
-    halign: center;
-}
 
-.loading-spinner {
-    opacity: 0.7;
-    animation: spin 1s linear infinite;
-}
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
 
-.status-page {
-    animation: fade-in 0.3s ease-out;
-}
 
-@keyframes fade-in {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
 
-.wallpaper-card,
-.current-thumb,
-.filter-chip,
-.banner {
-    transform: translateZ(0);
-}
 
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-@media (update: fast) {
-    .wallpaper-card {
-        transition-duration: 0.15s;
-    }
-
-    .filter-chip {
-        transition-duration: 0.15s;
-    }
-
-    .current-thumb {
-        transition-duration: 0.25s;
-    }
-}
-
-viewstack {
-    transition-duration: 300ms;
-}
-
-toast {
-    transition-duration: 300ms;
-}
 
 /* ============================================================================
    ACCESSIBILITY: Focus Indicators
@@ -729,9 +499,8 @@ toast {
 
 /* Strong, visible focus indicators for all interactive elements */
 *:focus-visible {
-    outline: 3px solid @accent_bg_color !important;
+    outline: 3px solid @accent_bg_color;
     outline-offset: 3px;
-    outline-style: solid;
 }
 
 /* Enhanced card focus indicator with shadow */
@@ -739,7 +508,6 @@ toast {
     outline: 3px solid @accent_bg_color;
     outline-offset: 4px;
     border-radius: 14px;
-    box-shadow: 0 0 0 6px alpha(@accent_bg_color, 0.3);
 }
 
 /* Button focus indicators */
@@ -775,6 +543,7 @@ Gtk.CheckButton:focus-visible {
 .high-contrast .wallpaper-card {
     border: 2px solid @window_fg_color;
     box-shadow: none;
+    background-color: @card_bg_color;
 }
 
 .high-contrast .wallpaper-card:hover {
@@ -785,11 +554,22 @@ Gtk.CheckButton:focus-visible {
 .high-contrast .wallpaper-card:focus-visible {
     outline: 3px solid @accent_bg_color;
     background: alpha(@window_bg_color, 0.1);
+    border-color: @accent_bg_color;
 }
 
 .high-contrast .wallpaper-card.selected {
     border: 3px solid @accent_bg_color;
     box-shadow: none;
+    background-color: alpha(@accent_bg_color, 0.1);
+}
+
+.high-contrast .wallpaper-card .filename-label {
+    color: @window_fg_color;
+    font-weight: 600;
+}
+
+.high-contrast .wallpaper-card .caption {
+    color: @window_fg_color;
 }
 
 .high-contrast .action-button {
@@ -831,47 +611,8 @@ Gtk.CheckButton:focus-visible {
    ACCESSIBILITY: Reduced Motion Support
    ============================================================================ */
 
-@media (prefers-reduced-motion: reduce) {
-    /* Disable all non-essential animations */
-    .wallpaper-card,
-    .filter-chip,
-    .banner,
-    .current-thumb,
-    .wallpaper-thumb,
-    .action-button,
-    .preview-dialog,
-    .status-page image,
-    .preview-image {
-        transition: none !important;
-        animation: none !important;
-    }
-
-    /* Keep essential transitions but make them instant */
-    viewstack,
-    .wallpaper-card,
-    .filter-chip {
-        transition-duration: 0.01ms !important;
-    }
-
-    /* Disable focus ring animation in reduced motion */
-    *:focus-visible {
-        animation: none !important;
-    }
-
-    /* Disable pulse animation */
-    .wallpaper-card.current {
-        animation: none !important;
-        border: 2px solid @accent_bg_color;
-    }
-
-    .status-page:hover image {
-        transform: none !important;
-    }
-
-    .wallpaper-card:hover {
-        transform: none !important;
-    }
-}
+/* GTK4 doesn't support @media (prefers-reduced-motion: reduce)
+   Reduced motion should be implemented in Python using Adw.Settings */
 
 /* ============================================================================
    ACCESSIBILITY: Text Scaling Support
@@ -931,19 +672,7 @@ application {
     color: @window_fg_color;
 }
 
-/* Interactive element indicators */
-button,
-.action-button,
-Gtk.Button {
-    cursor: pointer;
-    min-height: 44px;
-    min-width: 44px;
-}
-
-/* Cards are interactive */
-.wallpaper-card {
-    cursor: pointer;
-}
+/* Interactive element indicators - min-height/min-width removed to use smaller button sizes */
 
 /* Ensure tooltips are readable */
 tooltip {
@@ -952,16 +681,12 @@ tooltip {
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 0.875rem;
-    max-width: 300px;
 }
 
 /* ============================================================================
    KEYBOARD SHORTCUTS DIALOG
    ============================================================================ */
 
-.shortcuts-dialog {
-    max-width: 700px;
-}
 
 .shortcut-key {
     font-family: monospace;

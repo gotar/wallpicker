@@ -5,7 +5,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk  # noqa: E402
 
 
 class WallpaperStatusPage(Adw.Bin):
@@ -64,7 +64,9 @@ class WallpaperStatusPage(Adw.Bin):
         # Connect retry button
         self.retry_btn.connect("clicked", self._on_retry_clicked)
 
-    def set_state(self, state: str, title: str = None, description: str = None, callback=None):
+    def set_state(
+        self, state: str, title: str = None, description: str = None, callback=None
+    ):
         """Set the visible state.
 
         Args:

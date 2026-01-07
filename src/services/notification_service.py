@@ -1,7 +1,6 @@
 """Notification Service for system notifications."""
 
 import subprocess
-from pathlib import Path
 
 from services.base import BaseService
 
@@ -21,7 +20,9 @@ class NotificationService(BaseService):
     def enabled(self, value: bool) -> None:
         self._enabled = value
 
-    def notify(self, title: str, message: str, icon: str = "dialog-information") -> bool:
+    def notify(
+        self, title: str, message: str, icon: str = "dialog-information"
+    ) -> bool:
         if not self._enabled:
             return False
 

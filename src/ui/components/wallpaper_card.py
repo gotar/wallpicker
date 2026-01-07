@@ -1,12 +1,16 @@
 """Modern Wallpaper Card Component with hover animations and selection states."""
 
+from fractions import Fraction
+from pathlib import Path
+
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Pango", "1.0")
 
-from gi.repository import Gdk, GObject, Gtk, Pango
-from pathlib import Path
+from gi.repository import Gdk, Gtk, Pango  # noqa: E402
 
 
 class WallpaperCard(Gtk.Box):
@@ -145,7 +149,7 @@ class WallpaperCard(Gtk.Box):
         """Load thumbnail asynchronously."""
         # This will be called by the view with view_model.load_thumbnail_async
         # Set a callback property for the view to use
-        self._thumbnail_loader = lambda texture: self._on_thumbnail_loaded(texture)
+        self._thumbnail_loader = lambda thumbnail_path: self._on_thumbnail_loaded(thumbnail_path)
 
     def _on_thumbnail_loaded(self, texture):
         """Handle thumbnail load completion."""
@@ -153,19 +157,16 @@ class WallpaperCard(Gtk.Box):
             self.image.set_paintable(texture)
 
     def _create_info_row(self):
-        """Create information row with filename and resolution."""
+        """Create information row with filename and metadata (resolution, aspect ratio, size)."""
         info_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        info_box.set_margin_start(8)
-        info_box.set_margin_end(8)
-        info_box.set_margin_top(4)
+        info_box.add_css_class("card-info-box")
 
         # Filename (truncated)
         filename = self._get_filename()
         self.filename_label = Gtk.Label(label=filename)
-        self.filename_label.add_css_class("caption")
+        self.filename_label.add_css_class("filename-label")
         self.filename_label.set_hexpand(True)
         self.filename_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        self.filename_label.add_css_class("dim-label")
         info_box.append(self.filename_label)
 
         # Resolution/metadata
@@ -192,8 +193,6 @@ class WallpaperCard(Gtk.Box):
             return filename[:22] + "..."
         return filename
 
-
-
     def _get_accessible_name(self) -> str:
         """Get accessible name for screen readers."""
         filename = self._get_filename()
@@ -212,28 +211,71 @@ class WallpaperCard(Gtk.Box):
             parts.append("In favorites")
         return ". ".join(parts) if parts else "Wallpaper image"
 
+    def _format_aspect_ratio(self) -> str:
+        """Format aspect ratio as simplified fraction (e.g., '16:9')."""
+        res = self._get_resolution_string()
+        if res:
+            try:
+                width, height = res.split("x")
+                width = int(width)
+                height = int(height)
+                if height == 0:
+                    return ""
+                frac = Fraction(width, height).limit_denominator(100)
+                return f"{frac.numerator}:{frac.denominator}"
+            except (ValueError, ZeroDivisionError, AttributeError):
+                pass
+        return ""
+
     def _get_metadata(self) -> str:
-        """Get metadata string (resolution, size)."""
+        """Get metadata string (resolution, size, aspect ratio)."""
         parts = []
 
-        if hasattr(self.wallpaper, "resolution"):
-            resolution = self.wallpaper.resolution
-            if resolution:
-                parts.append(resolution)
+        resolution = self._get_resolution_string()
+        if resolution:
+            parts.append(resolution)
 
-        if hasattr(self.wallpaper, "file_size"):
-            size = self.wallpaper.file_size
-            if size:
-                parts.append(size)
+        aspect_ratio = self._format_aspect_ratio()
+        if aspect_ratio:
+            parts.append(aspect_ratio)
+
+        size = self._get_file_size_string()
+        if size:
+            parts.append(size)
 
         return " • ".join(parts) if parts else ""
+
+    def _get_resolution_string(self) -> str:
+        """Get resolution string from wallpaper."""
+        if hasattr(self.wallpaper, "resolution"):
+            res = self.wallpaper.resolution
+            if res:
+                return str(res)
+        return ""
+
+    def _get_file_size_string(self) -> str:
+        """Get formatted file size string."""
+        size = None
+        if hasattr(self.wallpaper, "file_size") and self.wallpaper.file_size:
+            size = self.wallpaper.file_size
+        elif hasattr(self.wallpaper, "size") and self.wallpaper.size:
+            size = self.wallpaper.size
+
+        if size:
+            if size >= 1024 * 1024:
+                return f"{size / (1024 * 1024):.1f} MB"
+            elif size >= 1024:
+                return f"{size / 1024:.1f} KB"
+            else:
+                return f"{size} B"
+        return ""
 
     def _create_actions_bar(self):
         """Create action buttons at bottom of card."""
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         actions_box.set_halign(Gtk.Align.CENTER)
         actions_box.set_homogeneous(True)
-        actions_box.set_margin_bottom(8)
+        actions_box.add_css_class("card-actions-box")
 
         # Set wallpaper button (always present)
         set_btn = Gtk.Button()
@@ -251,14 +293,14 @@ class WallpaperCard(Gtk.Box):
         # Favorite button (toggle state)
         self.fav_btn = Gtk.Button()
         if self.is_favorite:
-            self.fav_btn.set_icon_name("starred-symbolic")  # Filled star
+            self.fav_btn.set_icon_name("starred-symbolic")
         else:
-            self.fav_btn.set_icon_name("non-starred-symbolic")  # Outline star
+            self.fav_btn.set_icon_name("non-starred-symbolic")
         self.fav_btn.set_tooltip_text(
             "Add to favorites" if not self.is_favorite else "Remove from favorites"
         )
         self.fav_btn.add_css_class("action-button")
-        # Accessibility
+        self.fav_btn.add_css_class("favorite-action")
         fav_label = "Remove from favorites" if self.is_favorite else "Add to favorites"
         self.fav_btn.set_accessible_name(fav_label)
         self.fav_btn.set_accessible_role(Gtk.AccessibleRole.TOGGLE_BUTTON)
@@ -271,13 +313,12 @@ class WallpaperCard(Gtk.Box):
             download_btn.set_icon_name("folder-download-symbolic")
             download_btn.set_tooltip_text("Download wallpaper")
             download_btn.add_css_class("action-button")
-        # Accessibility
-        download_btn.set_accessible_name("Download wallpaper")
-        download_btn.set_accessible_description("Save this wallpaper to your local collection")
-        download_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-        download_btn.connect("clicked", self.on_download)
-        actions_box.append(download_btn)
-
+            download_btn.add_css_class("download-action")
+            download_btn.set_accessible_name("Download wallpaper")
+            download_btn.set_accessible_description("Save this wallpaper to your local collection")
+            download_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            download_btn.connect("clicked", self.on_download)
+            actions_box.append(download_btn)
 
         # Info/menu button
         if self.on_info:
@@ -285,12 +326,12 @@ class WallpaperCard(Gtk.Box):
             info_btn.set_icon_name("info-symbolic")
             info_btn.set_tooltip_text("More options")
             info_btn.add_css_class("action-button")
-        # Accessibility
-        info_btn.set_accessible_name("More options")
-        info_btn.set_accessible_description("View wallpaper details and additional options")
-        info_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-        info_btn.connect("clicked", self.on_info)
-        actions_box.append(info_btn)
+            info_btn.add_css_class("info-action")
+            info_btn.set_accessible_name("More options")
+            info_btn.set_accessible_description("View wallpaper details and additional options")
+            info_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            info_btn.connect("clicked", self.on_info)
+            actions_box.append(info_btn)
 
         # Delete button (Local only)
         if self.on_delete:
@@ -298,12 +339,12 @@ class WallpaperCard(Gtk.Box):
             delete_btn.set_icon_name("user-trash-symbolic")
             delete_btn.set_tooltip_text("Delete")
             delete_btn.add_css_class("destructive-action")
-        # Accessibility
-        delete_btn.set_accessible_name("Delete wallpaper")
-        delete_btn.set_accessible_description("Move this wallpaper to trash")
-        delete_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-        delete_btn.connect("clicked", self.on_delete)
-        actions_box.append(delete_btn)
+            delete_btn.add_css_class("action-button")
+            delete_btn.set_accessible_name("Delete wallpaper")
+            delete_btn.set_accessible_description("Move this wallpaper to trash")
+            delete_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            delete_btn.connect("clicked", self.on_delete)
+            actions_box.append(delete_btn)
 
         self.append(actions_box)
 

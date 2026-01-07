@@ -215,7 +215,9 @@ class WallhavenService(BaseService):
             self.log_debug(f"Downloaded wallpaper to {dest}")
             return True
         except (aiohttp.ClientError, OSError) as e:
-            self.log_error(f"Failed to download wallpaper {wallpaper.id}: {e}", exc_info=True)
+            self.log_error(
+                f"Failed to download wallpaper {wallpaper.id}: {e}", exc_info=True
+            )
             return False
 
     async def close(self) -> None:

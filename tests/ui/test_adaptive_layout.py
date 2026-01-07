@@ -227,65 +227,57 @@ class TestViewSwitcherBarAutoHide:
 
 
 class TestCSSMediaQueries:
-    """Test CSS media query functionality (integration tests)."""
+    """Test CSS functionality - Note: GTK4 doesn't support @media queries."""
 
-    def test_card_width_narrow(self):
-        """Test card width for narrow screens (< 600px)."""
-        # This would require actual rendering and CSS inspection
-        # For now, we verify CSS file exists and contains media queries
+    def test_css_file_exists(self):
+        """Test that CSS file exists."""
         import os
 
         css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         assert os.path.exists(css_path)
 
+    def test_wallpaper_card_css_exists(self):
+        """Test that wallpaper card styling exists."""
+        import os
+
+        css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         with open(css_path) as f:
             css_content = f.read()
-            assert "@media (max-width: 600px)" in css_content
             assert ".wallpaper-card" in css_content
 
-    def test_card_width_medium(self):
-        """Test card width for medium screens (600-900px)."""
+    def test_action_button_css_exists(self):
+        """Test that action button styling exists."""
         import os
 
         css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         with open(css_path) as f:
             css_content = f.read()
-            assert "@media (min-width: 600px) and (max-width: 900px)" in css_content
+            assert ".action-button" in css_content
+            assert "min-width" in css_content
 
-    def test_card_width_wide(self):
-        """Test card width for wide screens (900-1200px)."""
+    def test_view_switcher_bar_css_exists(self):
+        """Test that view switcher bar styling exists."""
         import os
 
         css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         with open(css_path) as f:
             css_content = f.read()
-            assert "@media (min-width: 900px) and (max-width: 1200px)" in css_content
+            assert ".view-switcher-bar" in css_content or "viewswitcherbar" in css_content.lower()
 
-    def test_card_width_ultra_wide(self):
-        """Test card width for ultra-wide screens (> 1200px)."""
+    def test_filter_bar_css_exists(self):
+        """Test that filter bar styling exists."""
         import os
 
         css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         with open(css_path) as f:
             css_content = f.read()
-            assert "@media (min-width: 1200px)" in css_content
+            assert ".filter-bar" in css_content or "filterbar" in css_content.lower()
 
-    def test_view_switcher_bar_auto_hide_css_exists(self):
-        """Test that ViewSwitcherBar auto-hide CSS exists."""
+    def test_focus_styles_exist(self):
+        """Test that focus styles are defined."""
         import os
 
         css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
         with open(css_path) as f:
             css_content = f.read()
-            assert ".auto-hide-wide" in css_content
-            assert "@media (min-width: 700px)" in css_content
-
-    def test_filter_bar_vertical_css(self):
-        """Test that filter bar vertical CSS exists."""
-        import os
-
-        css_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "style.css")
-        with open(css_path) as f:
-            css_content = f.read()
-            assert ".filter-bar.vertical" in css_content
-            assert "flex-direction: column" in css_content
+            assert ":focus" in css_content

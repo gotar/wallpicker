@@ -82,7 +82,7 @@ def test_shortcuts_dialog_component_exists():
 def test_cards_are_made_focusable():
     """Test that cards are made focusable in views."""
     # Check local_view.py contains focusability setup
-    local_view_path = Path(__file__).parent.parent / "src" / "ui" / "views" / "local_view.py"
+    local_view_path = Path(__file__).parent.parent.parent / "src" / "ui" / "views" / "local_view.py"
 
     assert local_view_path.exists()
 
@@ -97,7 +97,7 @@ def test_cards_are_made_focusable():
 
 def test_css_focus_styles_exist():
     """Test focus styles are defined in CSS."""
-    css_path = Path(__file__).parent.parent / "data" / "style.css"
+    css_path = Path(__file__).parent.parent.parent / "data" / "style.css"
 
     assert css_path.exists()
 
@@ -150,7 +150,7 @@ def test_gtk_event_controller_imports():
     """Test EventControllerKey is imported correctly."""
     from ui.views.local_view import LocalView
 
-    local_view_path = Path(__file__).parent.parent / "src" / "ui" / "views" / "local_view.py"
+    local_view_path = Path(__file__).parent.parent.parent / "src" / "ui" / "views" / "local_view.py"
 
     with open(local_view_path, "r") as f:
         content = f.read()
@@ -167,7 +167,7 @@ def test_shortcuts_dialog_structure():
     from ui.components.shortcuts_dialog import ShortcutsDialog
 
     shortcuts_dialog_path = (
-        Path(__file__).parent.parent / "src" / "ui" / "components" / "shortcuts_dialog.py"
+        Path(__file__).parent.parent.parent / "src" / "ui" / "components" / "shortcuts_dialog.py"
     )
 
     assert shortcuts_dialog_path.exists()

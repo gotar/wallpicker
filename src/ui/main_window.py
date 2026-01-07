@@ -1,15 +1,18 @@
 """Main Window - Refactored with Adw.ToolbarView and MVVM pattern."""
 
+# ruff: noqa: E402  # gi.repository imports must follow gi.require_version()
+
+import asyncio
 import sys
 from pathlib import Path
-
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.banner_service import BannerService
 from services.config_service import ConfigService
@@ -20,10 +23,10 @@ from services.thumbnail_cache import ThumbnailCache
 from services.toast_service import ToastService
 from services.wallhaven_service import WallhavenService
 from services.wallpaper_setter import WallpaperSetter
+from ui.components.shortcuts_dialog import ShortcutsDialog
 from ui.view_models.favorites_view_model import FavoritesViewModel
 from ui.view_models.local_view_model import LocalViewModel
 from ui.view_models.wallhaven_view_model import WallhavenViewModel
-from ui.components.shortcuts_dialog import ShortcutsDialog
 from ui.views.favorites_view import FavoritesView
 from ui.views.local_view import LocalView
 from ui.views.wallhaven_view import WallhavenView
@@ -36,48 +39,62 @@ class MainWindow(Adw.Application):
         super().__init__(application_id="com.gotar.Wallpicker")
         self.debug = debug
         self.window = None
+        self.config = None
         self.config_service = None
         self.wallpaper_setter = None
+        self.local_service = None
+        self.favorites_service = None
+        self.wallhaven_service = None
+        self.thumbnail_cache = None
+        self.notification_service = None
         self.local_view_model = None
         self.favorites_view_model = None
         self.wallhaven_view_model = None
 
     def do_activate(self):
         if not self.window:
+            # Load CSS before creating window
+            self._load_css()
+
             self.config_service = ConfigService()
-            config = self.config_service.get_config()
+            self.config = self.config_service.get_config()
 
             self.wallpaper_setter = WallpaperSetter()
-            notification_service = NotificationService(
-                enabled=config.notifications_enabled if config else True
+            self.notification_service = NotificationService(
+                enabled=self.config.notifications_enabled if self.config else True
             )
 
-            local_service = LocalWallpaperService(pictures_dir=config.pictures_dir)
-            favorites_service = FavoritesService()
-            wallhaven_service = WallhavenService()
-            thumbnail_cache = ThumbnailCache()
+            self.local_service = LocalWallpaperService(
+                pictures_dir=self.config.pictures_dir if self.config else None
+            )
+            self.favorites_service = FavoritesService()
+            self.wallhaven_service = WallhavenService()
+            self.thumbnail_cache = ThumbnailCache()
+            self.banner_service = BannerService(self)
 
         self.wallhaven_view_model = WallhavenViewModel(
-            wallhaven_service=wallhaven_service,
-            thumbnail_cache=thumbnail_cache,
+            wallhaven_service=self.wallhaven_service,
+            thumbnail_cache=self.thumbnail_cache,
             wallpaper_setter=self.wallpaper_setter,
             config_service=self.config_service,
         )
-        self.wallhaven_view_model.favorites_service = favorites_service
-        self.wallhaven_view_model.notification_service = notification_service
+        self.wallhaven_view_model.favorites_service = self.favorites_service
+        self.wallhaven_view_model.notification_service = self.notification_service
         self.local_view_model = LocalViewModel(
-            local_service=local_service,
+            local_service=self.local_service,
             wallpaper_setter=self.wallpaper_setter,
-            pictures_dir=config.pictures_dir,
+            pictures_dir=self.config.pictures_dir if self.config else None,
             config_service=self.config_service,
+            thumbnail_cache=self.thumbnail_cache,
         )
-        self.local_view_model.favorites_service = favorites_service
-        self.local_view_model.notification_service = notification_service
+        self.local_view_model.favorites_service = self.favorites_service
+        self.local_view_model.notification_service = self.notification_service
         self.favorites_view_model = FavoritesViewModel(
-            favorites_service=favorites_service,
+            favorites_service=self.favorites_service,
             wallpaper_setter=self.wallpaper_setter,
+            thumbnail_cache=self.thumbnail_cache,
         )
-        self.favorites_view_model.notification_service = notification_service
+        self.favorites_view_model.notification_service = self.notification_service
 
         self.window = WallPickerWindow(
             application=self,
@@ -85,9 +102,42 @@ class MainWindow(Adw.Application):
             favorites_view_model=self.favorites_view_model,
             wallhaven_view_model=self.wallhaven_view_model,
             wallpaper_setter=self.wallpaper_setter,
+            banner_service=self.banner_service,
         )
 
         self.window.present()
+
+    def _load_css(self):
+        """Load CSS stylesheet for the application."""
+        # Get the path to the CSS file
+        # The CSS file is at data/style.css relative to the project root
+        project_root = Path(__file__).parent.parent.parent
+        css_path = project_root / "data" / "style.css"
+
+        # Check if CSS file exists
+        if not css_path.exists():
+            print(f"Warning: CSS file not found at {css_path}")
+            return
+
+        # Create CSS provider
+        css_provider = Gtk.CssProvider()
+
+        try:
+            # Load CSS from file
+            css_provider.load_from_path(str(css_path))
+
+            # Apply CSS to all windows
+            display = Gdk.Display.get_default()
+            if display:
+                Gtk.StyleContext.add_provider_for_display(
+                    display,
+                    css_provider,
+                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                )
+            else:
+                print("Warning: Could not get default display for CSS loading")
+        except Exception as e:
+            print(f"Error loading CSS: {e}")
 
 
 class WallPickerWindow(Adw.ApplicationWindow):
@@ -100,6 +150,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         favorites_view_model,
         wallhaven_view_model,
         wallpaper_setter,
+        banner_service,
     ):
         super().__init__(application=application)
         self.set_title("WallPicker")
@@ -110,12 +161,30 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.favorites_view_model = favorites_view_model
         self.wallhaven_view_model = wallhaven_view_model
         self.wallpaper_setter = wallpaper_setter
+        self.banner_service = banner_service
 
-        self.banner_service = BannerService(self)
         self._create_ui()
         self._setup_menu()
         self._setup_keyboard_navigation()
         self._setup_focus_chain()
+
+    def _on_set_wallpaper(self, wallpaper):
+        """Set wallpaper from any view."""
+        self.wallpaper_setter.set_wallpaper(wallpaper.path)
+        self.toast_service.show_info("Wallpaper set")
+
+    def _on_delete_wallpaper(self, wallpaper):
+        """Delete wallpaper from local view."""
+
+        # Use the view model to delete (it has the service)
+        self.local_view_model.delete_wallpaper(wallpaper)
+        self.toast_service.show_info("Wallpaper deleted")
+
+    def _on_remove_favorite(self, favorite):
+        """Remove favorite from favorites view."""
+        # Use the view model to remove (it has the service)
+        self.favorites_view_model.remove_favorite(favorite)
+        self.toast_service.show_info("Removed from favorites")
 
     def _create_ui(self):
         """Create main UI with Adw.ToolbarView layout."""
@@ -132,7 +201,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.refresh_btn.set_icon_name("view-refresh-symbolic")
         self.refresh_btn.add_css_class("flat")
         self.refresh_btn.set_tooltip_text("Refresh")
-        self.refresh_btn.connect("clicked", self._on_refresh_clicked)
+        self.refresh_btn.connect("clicked", self._on_refresh_button_clicked)
         self.header.pack_start(self.refresh_btn)
 
         # Menu button
@@ -155,7 +224,12 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.tabs = ["local", "wallhaven", "favorites"]
 
         # Create views (add_titled() auto-creates ViewSwitcherBar at bottom)
-        self.local_view = LocalView(self.local_view_model, self.banner_service)
+        self.local_view = LocalView(
+            self.local_view_model,
+            self.banner_service,
+            on_set_wallpaper=self._on_set_wallpaper,
+            on_delete=self._on_delete_wallpaper,
+        )
         local_page = self.stack.add_titled(self.local_view, "local", "Local")
         local_page.set_icon_name("folder-symbolic")
 
@@ -163,7 +237,10 @@ class WallPickerWindow(Adw.ApplicationWindow):
         wallhaven_page = self.stack.add_titled(self.wallhaven_view, "wallhaven", "Wallhaven")
         wallhaven_page.set_icon_name("globe-symbolic")
 
-        self.favorites_view = FavoritesView(self.favorites_view_model, self.banner_service)
+        self.favorites_view = FavoritesView(
+            self.favorites_view_model,
+            self.banner_service,
+        )
         favorites_page = self.stack.add_titled(self.favorites_view, "favorites", "Favorites")
         favorites_page.set_icon_name("starred-symbolic")
 
@@ -200,15 +277,10 @@ class WallPickerWindow(Adw.ApplicationWindow):
         elif visible_child == self.wallhaven_view:
             # Only load Wallhaven wallpapers if not already loaded
             if not self.wallhaven_view_model.wallpapers:
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.wallhaven_view_model.load_initial_wallpapers())
 
-                def load_wallhaven():
-                    import asyncio
-
-                    asyncio.run(self.wallhaven_view_model.load_initial_wallpapers())
-
-                self.wallhaven_view_model._executor.submit(load_wallhaven)
-
-    def _on_refresh_clicked(self, button):
+    def _on_refresh_button_clicked(self, button):
         """Handle refresh button click."""
         visible_child = self.stack.get_visible_child()
         if visible_child == self.local_view:
@@ -218,13 +290,8 @@ class WallPickerWindow(Adw.ApplicationWindow):
             self.favorites_view_model.load_favorites()
             self.toast_service.show_info("Favorites refreshed")
         elif visible_child == self.wallhaven_view:
-            # Reload Wallhaven search
-            async def reload_wallhaven():
-                await self.wallhaven_view_model.load_initial_wallpapers()
-
-            import asyncio
-
-            asyncio.run(reload_wallhaven())
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.wallhaven_view_model.load_initial_wallpapers())
             self.toast_service.show_info("Wallhaven wallpapers refreshed")
 
     def _setup_gestures(self):
