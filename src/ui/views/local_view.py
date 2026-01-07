@@ -303,7 +303,7 @@ class LocalView(Adw.BreakpointBin):
 
     def _create_wallpaper_card(self, wallpaper):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        card.set_size_request(220, 200)
+        card.set_hexpand(True)
         card.add_css_class("wallpaper-card")
 
         # Make card focusable
@@ -346,7 +346,8 @@ class LocalView(Adw.BreakpointBin):
         filename_label = Gtk.Label()
         filename_label.set_ellipsize(Pango.EllipsizeMode.END)
         filename_label.set_lines(1)
-        filename_label.set_max_width_chars(25)
+        filename_label.set_max_width_chars(20)
+        filename_label.set_xalign(0)
         filename_label.set_text(wallpaper.filename)
         filename_label.add_css_class("filename-label")
         info_box.append(filename_label)

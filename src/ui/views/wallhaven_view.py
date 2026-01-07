@@ -358,7 +358,6 @@ class WallhavenView(Adw.Bin):
     def _create_wallpaper_card(self, wallpaper):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.set_hexpand(True)
-        card.set_size_request(220, 200)
         card.add_css_class("wallpaper-card")
 
         is_selected = wallpaper in self.view_model.get_selected_wallpapers()

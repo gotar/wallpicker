@@ -293,7 +293,7 @@ class FavoritesView(Adw.Bin):
     def _create_wallpaper_card(self, favorite):
         """Create wallpaper card with image and actions"""
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        card.set_size_request(220, 200)
+        card.set_hexpand(True)
         card.add_css_class("wallpaper-card")
 
         # Make card focusable
@@ -339,7 +339,8 @@ class FavoritesView(Adw.Bin):
         filename_label = Gtk.Label()
         filename_label.set_ellipsize(Pango.EllipsizeMode.END)
         filename_label.set_lines(1)
-        filename_label.set_max_width_chars(25)
+        filename_label.set_max_width_chars(20)
+        filename_label.set_xalign(0)
         filename_label.set_text(
             Path(wallpaper.path).name if hasattr(wallpaper, "path") else wallpaper.filename
         )
