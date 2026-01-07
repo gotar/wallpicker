@@ -165,8 +165,10 @@ class WallpaperCard(Gtk.Box):
         filename = self._get_filename()
         self.filename_label = Gtk.Label(label=filename)
         self.filename_label.add_css_class("filename-label")
-        self.filename_label.set_hexpand(True)
-        self.filename_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        self.filename_label.set_xalign(0)
+        self.filename_label.set_lines(1)
+        self.filename_label.set_max_width_chars(25)
+        self.filename_label.set_ellipsize(Pango.EllipsizeMode.END)
         info_box.append(self.filename_label)
 
         # Resolution/metadata
@@ -180,17 +182,13 @@ class WallpaperCard(Gtk.Box):
         self.append(info_box)
 
     def _get_filename(self) -> str:
-        """Get truncated filename."""
+        """Get filename (truncation handled by GTK ellipsis)."""
         if hasattr(self.wallpaper, "filename"):
             filename = self.wallpaper.filename
         elif hasattr(self.wallpaper, "path"):
             filename = Path(self.wallpaper.path).name
         else:
             filename = "wallpaper"
-
-        # Truncate if too long
-        if len(filename) > 25:
-            return filename[:22] + "..."
         return filename
 
     def _get_accessible_name(self) -> str:
