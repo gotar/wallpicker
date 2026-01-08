@@ -39,6 +39,9 @@ package() {
   # Install icon
   install -Dm644 data/wallpaper-icon.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/wallpicker.svg"
 
+  # Install CSS stylesheet
+  install -Dm644 data/style.css "${pkgdir}/usr/share/wallpicker/style.css"
+
   # Install documentation
   install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
 
