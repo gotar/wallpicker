@@ -24,14 +24,14 @@ sha256sums=('SKIP')
 
 build() {
   cd "${srcdir}/${pkgname}"
-  python -m build --wheel --no-isolation
+  /usr/bin/python -m build --wheel --no-isolation
 }
 
 package() {
   cd "${srcdir}/${pkgname}"
 
   # Install Python package
-  python -m installer --destdir="$pkgdir" dist/*.whl
+  /usr/bin/python -m installer --destdir="$pkgdir" dist/*.whl
 
   # Install desktop entry
   install -Dm644 wallpicker.desktop "${pkgdir}/usr/share/applications/wallpicker.desktop"
