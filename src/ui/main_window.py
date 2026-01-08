@@ -116,24 +116,27 @@ class MainWindow(Adw.Application):
 
     def _load_css(self):
         """Load CSS stylesheet for the application."""
-        # Get the path to the CSS file
-        # The CSS file is at data/style.css relative to the project root
-        project_root = Path(__file__).parent.parent.parent
-        css_path = project_root / "data" / "style.css"
+        css_paths = [
+            Path(__file__).parent.parent.parent / "data" / "style.css",
+            Path("/usr/share/wallpicker/style.css"),
+            Path.home() / ".local/share/wallpicker/style.css",
+        ]
 
-        # Check if CSS file exists
-        if not css_path.exists():
-            logging.warning(f"CSS file not found at {css_path}")
+        css_path = None
+        for path in css_paths:
+            if path.exists():
+                css_path = path
+                break
+
+        if not css_path:
+            logging.warning(f"CSS file not found in any of: {css_paths}")
             return
 
-        # Create CSS provider
         css_provider = Gtk.CssProvider()
 
         try:
-            # Load CSS from file
             css_provider.load_from_path(str(css_path))
 
-            # Apply CSS to all windows
             display = Gdk.Display.get_default()
             if display:
                 Gtk.StyleContext.add_provider_for_display(
@@ -541,12 +544,11 @@ class WallPickerWindow(Adw.ApplicationWindow):
 
 def main():
     """Entry point for the wallpicker application."""
-    import asyncio
     import sys
 
-    from gi.events import GLibEventLoopPolicy
+    from core.asyncio_integration import setup_event_loop
 
-    asyncio.set_event_loop_policy(GLibEventLoopPolicy())
+    setup_event_loop()
 
     debug = "--debug" in sys.argv
     if debug:
