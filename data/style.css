@@ -38,6 +38,44 @@
     background-color: alpha(@success_bg_color, 0.08);
 }
 
+/* Flash animation for wallpaper refresh */
+@keyframes flash-success {
+    0%, 100% {
+        background-color: @success_bg_color;
+        opacity: 0.3;
+    }
+    50% {
+        background-color: @success_bg_color;
+        opacity: 0.6;
+    }
+}
+
+.wallpaper-card.flash-animation {
+    animation: flash-success 0.2s ease-in-out 2;
+}
+
+/* Upscale blocking overlay */
+.upscale-overlay {
+    background-color: alpha(@window_bg_color, 0.9);
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid alpha(@accent_bg_color, 0.3);
+}
+
+.upscale-overlay-small {
+    background-color: alpha(@window_bg_color, 0.9);
+    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid alpha(@accent_bg_color, 0.3);
+}
+
+.upscale-overlay-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: @accent_color;
+    margin-top: 8px;
+}
+
 
 .wallpaper-card:focus:focus-visible {
     outline: 3px solid @accent_bg_color;

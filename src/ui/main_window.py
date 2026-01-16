@@ -106,6 +106,7 @@ class MainWindow(Adw.Application):
             wallpaper_setter=self.wallpaper_setter,
             banner_service=self.banner_service,
             thumbnail_loader=self.thumbnail_loader,
+            config_service=self.config_service,
         )
 
         # Add responsive breakpoints
@@ -162,6 +163,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         wallpaper_setter,
         banner_service,
         thumbnail_loader,
+        config_service=None,
     ):
         super().__init__(application=application)
         self.set_title("WallPicker")
@@ -174,6 +176,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
         self.wallpaper_setter = wallpaper_setter
         self.banner_service = banner_service
         self.thumbnail_loader = thumbnail_loader
+        self.config_service = config_service
 
         self.wallhaven_view_model.connect("wallpaper-downloaded", self._on_wallpaper_downloaded)
 
@@ -249,6 +252,7 @@ class WallPickerWindow(Adw.ApplicationWindow):
             self.thumbnail_loader,
             on_set_wallpaper=self._on_set_wallpaper,
             on_delete=self._on_delete_wallpaper,
+            config_service=self.config_service,
         )
         local_page = self.stack.add_titled(self.local_view, "local", "Local")
         local_page.set_icon_name("folder-symbolic")

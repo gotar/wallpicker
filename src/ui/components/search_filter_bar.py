@@ -65,9 +65,7 @@ class SearchFilterBar(Gtk.Box):
         self.add_css_class("search-filter-bar")
 
         # Search entry
-        self.search_entry = Gtk.SearchEntry(
-            placeholder_text=self._get_search_placeholder()
-        )
+        self.search_entry = Gtk.SearchEntry(placeholder_text=self._get_search_placeholder())
         self.search_entry.set_hexpand(True)
         self.search_entry.set_size_request(300, -1)
         self.append(self.search_entry)
@@ -89,9 +87,7 @@ class SearchFilterBar(Gtk.Box):
             self._create_filter_popover()
 
         # Active filter chips (initially hidden)
-        self._chips_container = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=8
-        )
+        self._chips_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._chips_container.add_css_class("filter-chips")
         self._chips_container.set_visible(False)
 
@@ -113,9 +109,7 @@ class SearchFilterBar(Gtk.Box):
         self.sort_dropdown.set_model(string_list)
 
         # Store sort mapping for value lookup
-        self._sort_mapping = {
-            idx: value for idx, (_, value) in enumerate(self._sort_options_list)
-        }
+        self._sort_mapping = {idx: value for idx, (_, value) in enumerate(self._sort_options_list)}
 
     def _get_sort_options(self) -> list[tuple[str, str]]:
         """Get sort options for current tab type.
@@ -136,6 +130,7 @@ class SearchFilterBar(Gtk.Box):
             return [
                 ("Name", "name"),
                 ("Date Added", "date"),
+                ("Resolution", "resolution"),
             ]
         return []
 
@@ -285,9 +280,7 @@ class SearchFilterBar(Gtk.Box):
             self.purity_nsfw.connect("toggled", self._on_purity_toggled)
 
             # Resolution dropdown
-            self.resolution_dropdown.connect(
-                "notify::selected", self._on_resolution_changed
-            )
+            self.resolution_dropdown.connect("notify::selected", self._on_resolution_changed)
 
             # Advanced filters
             self.top_range_combo.connect("notify::selected", self._on_top_range_changed)

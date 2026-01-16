@@ -13,6 +13,7 @@ A modern GTK4/Libadwaita wallpaper picker application. Browse and discover wallp
 - **Favorites System**: Save your favorite wallpapers for quick access across sessions. Supports both local and remote wallpapers with automatic downloading.
 - **Smart Thumbnail Caching**: Persistent disk-based caching for instant thumbnail loading with automatic cleanup
 - **Smooth Transitions**: Animated wallpaper changes using `awww` utility
+- **AI Upscaling**: Upscale local wallpapers 2x using Real-ESRGAN (requires `realesrgan-ncnn-vulkan`)
 - **Modern UI**: Native GTK4/Libadwaita interface with Adw.ToolbarView, Adw.ToastOverlay, Adw.StatusPage, and responsive grid layouts
 - **MVVM Architecture**: Clean separation of concerns with proper ViewModels, Views, and Services
 - **Async Operations**: All I/O operations use async/await for non-blocking UI
@@ -30,6 +31,7 @@ A modern GTK4/Libadwaita wallpaper picker application. Browse and discover wallp
 - **GTK4**: 4.0 or higher
 - **Libadwaita**: 1.0 or higher
 - **awww**: Animated wallpaper setter (optional but recommended for transitions)
+- **realesrgan-ncnn-vulkan**: AI upscaler for local wallpapers (optional, enables upscaler feature)
 
 ### Python Packages
 
@@ -140,6 +142,7 @@ Manage your existing wallpaper collection from your local directory.
 - **Set Wallpaper**: Apply any image as your desktop background
 - **Add to Favorites**: Save wallpapers to your favorites collection
 - **Delete**: Remove unwanted wallpapers (moves to trash)
+- **Upscale**: Upscale wallpapers 2x using AI (requires `realesrgan-ncnn-vulkan` and `upscaler_enabled: true` in config)
 - **Notifications**: Get system notifications for successful actions
 
 #### Favorites Tab
@@ -161,13 +164,15 @@ WallPicker uses a configuration file at `~/.config/wallpicker/config.json` for c
 {
     "local_wallpapers_dir": null,
     "wallhaven_api_key": null,
-    "notifications_enabled": true
+    "notifications_enabled": true,
+    "upscaler_enabled": false
 }
 ```
 
  - **local_wallpapers_dir**: Custom path to your wallpapers directory (default: `~/Pictures`)
-- **wallhaven_api_key**: Wallhaven API key for extended access (optional)
-- **notifications_enabled**: Enable/disable system notifications for actions (default: true)
+ - **wallhaven_api_key**: Wallhaven API key for extended access (optional)
+ - **notifications_enabled**: Enable/disable system notifications for actions (default: true)
+ - **upscaler_enabled**: Enable AI upscaler button for local wallpapers (default: false, requires `realesrgan-ncnn-vulkan`)
 
  ### Setting Custom Wallpaper Directory
 
@@ -212,6 +217,28 @@ echo '{"local_wallpapers_dir": "/path/to/wallpapers", "wallhaven_api_key": "your
 ```bash
 echo '{"wallhaven_api_key": "your_api_key_here"}' > ~/.config/wallpicker/config.json
 ```
+
+### AI Upscaler (Optional)
+
+WallPicker can upscale local wallpapers 2x using Real-ESRGAN AI upscaling.
+
+**Requirements:**
+- Install `realesrgan-ncnn-vulkan` from AUR:
+```bash
+yay -S realesrgan-ncnn-vulkan
+```
+
+**Enable in config:**
+```bash
+echo '"upscaler_enabled": true' > ~/.config/wallpicker/config.json
+```
+
+Or combine with other settings:
+```bash
+echo '{"local_wallpapers_dir": "/path/to/wallpapers", "upscaler_enabled": true}' > ~/.config/wallpicker/config.json
+```
+
+Once enabled, an "Upscale 2x (AI)" button will appear on local wallpaper cards. The upscaled image replaces the original file.
 
 ### Cache Management
 

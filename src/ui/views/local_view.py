@@ -27,6 +27,7 @@ class LocalView(Adw.BreakpointBin):
         thumbnail_loader=None,
         on_set_wallpaper=None,
         on_delete=None,
+        config_service=None,
     ):
         super().__init__()
         self.view_model = view_model
@@ -35,13 +36,24 @@ class LocalView(Adw.BreakpointBin):
         self.thumbnail_loader = thumbnail_loader
         self.on_set_wallpaper = on_set_wallpaper
         self.on_delete = on_delete
+        self.config_service = config_service
         self._last_selected_wallpaper = None
         self._search_debounce_timer = None
+        self._wallpaper_card_map = {}  # Reverse mapping: wallpaper -> card
+        self._path_card_map = {}  # Mapping by path string: path -> card
+        self._upscale_overlays = {}  # Card -> overlay widget
+        self._metadata_labels = {}  # path -> (resolution_label, size_label)
 
         self._create_ui()
 
         self._setup_keyboard_shortcuts()
         self._bind_to_view_model()
+        self._bind_upscale_signal()
+
+    def _bind_upscale_signal(self):
+        """Connect to upscaling signals."""
+        self.view_model.connect("upscaling-complete", self._on_upscale_complete)
+        self.view_model.connect("upscaling-queue-changed", self._on_queue_changed)
 
     def _create_ui(self):
         """Create main UI structure"""
@@ -58,9 +70,7 @@ class LocalView(Adw.BreakpointBin):
         toolbar_wrapper.add_css_class("toolbar-wrapper")
         self.main_box.append(toolbar_wrapper)
 
-        folder_btn = Gtk.Button(
-            icon_name="folder-symbolic", tooltip_text="Choose folder"
-        )
+        folder_btn = Gtk.Button(icon_name="folder-symbolic", tooltip_text="Choose folder")
         folder_btn.connect("clicked", self._on_folder_clicked)
         toolbar_wrapper.append(folder_btn)
 
@@ -93,6 +103,8 @@ class LocalView(Adw.BreakpointBin):
             self.view_model.sort_by_name()
         elif sorting == "date":
             self.view_model.sort_by_date()
+        elif sorting == "resolution":
+            self.view_model.sort_by_resolution()
 
     def update_status(self, count: int):
         self.status_label.set_text(f"{count} wallpapers")
@@ -340,6 +352,8 @@ class LocalView(Adw.BreakpointBin):
 
         # Store mapping for keyboard activation
         self.card_wallpaper_map[card] = wallpaper
+        self._wallpaper_card_map[wallpaper] = card
+        self._path_card_map[str(wallpaper.path)] = card
 
         gesture = Gtk.GestureClick()
         gesture.set_button(1)
@@ -357,6 +371,10 @@ class LocalView(Adw.BreakpointBin):
         image.set_content_fit(Gtk.ContentFit.CONTAIN)
         image.add_css_class("wallpaper-thumb")
 
+        # Create overlay container for image + spinner
+        image_overlay = Gtk.Overlay()
+        image_overlay.set_child(image)
+
         def on_thumbnail_loaded(texture):
             if texture:
                 image.set_paintable(texture)
@@ -365,7 +383,7 @@ class LocalView(Adw.BreakpointBin):
         if self.thumbnail_loader:
             self.thumbnail_loader.load_thumbnail_async(thumb_path, on_thumbnail_loaded)
 
-        card.append(image)
+        card.append(image_overlay)
 
         # Info box with filename and metadata
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -402,6 +420,10 @@ class LocalView(Adw.BreakpointBin):
         metadata_label.add_css_class("metadata-label")
         info_box.append(metadata_label)
 
+        # Store metadata label reference for refresh
+        path_str = str(wallpaper.path)
+        self._metadata_labels[path_str] = metadata_label
+
         card.append(info_box)
 
         # Actions box
@@ -409,18 +431,14 @@ class LocalView(Adw.BreakpointBin):
         actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
 
-        set_btn = Gtk.Button(
-            icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper"
-        )
+        set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
         set_btn.add_css_class("suggested-action")
         set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
-        fav_btn = Gtk.Button(
-            icon_name="starred-symbolic", tooltip_text="Add to favorites"
-        )
+        fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
         fav_btn.add_css_class("action-button")
         fav_btn.add_css_class("favorite-action")
         fav_btn.set_cursor_from_name("pointer")
@@ -434,8 +452,23 @@ class LocalView(Adw.BreakpointBin):
         delete_btn.connect("clicked", self._on_delete_wallpaper, wallpaper)
         actions_box.append(delete_btn)
 
+        # Show upscale button only if enabled in config
+        if self._is_upscaler_enabled():
+            upscale_btn = Gtk.Button(icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)")
+            upscale_btn.add_css_class("action-button")
+            upscale_btn.set_cursor_from_name("pointer")
+            upscale_btn.connect("clicked", self._on_upscale_wallpaper, wallpaper)
+            actions_box.append(upscale_btn)
+
         card.append(actions_box)
         return card
+
+    def _is_upscaler_enabled(self) -> bool:
+        """Returns True if upscaler is enabled in config."""
+        if not self.config_service:
+            return False
+        config = self.config_service.get_config()
+        return config.upscaler_enabled if config else False
 
     def _on_card_clicked(self, gesture, n_press, x, y, wallpaper):
         if n_press == 2:
@@ -489,6 +522,205 @@ class LocalView(Adw.BreakpointBin):
 
         dialog.connect("response", on_response)
         dialog.present()
+
+    def _on_upscale_wallpaper(self, button, wallpaper):
+        success, message = self.view_model.queue_upscale(wallpaper)
+        if success:
+            # Show blocking overlay on the card
+            card = self._wallpaper_card_map.get(wallpaper)
+            if card:
+                self._show_upscale_overlay(card)
+            if self.toast_service:
+                self.toast_service.show_info(message)
+        else:
+            if self.toast_service:
+                self.toast_service.show_error(message)
+
+    def _show_upscale_overlay(self, card):
+        """Show blocking overlay with spinner on the card's image."""
+        if card in self._upscale_overlays:
+            return
+
+        # Find the image_overlay in the card
+        image_overlay = None
+        child = card.get_first_child()
+        while child:
+            if isinstance(child, Gtk.Overlay):
+                image_overlay = child
+                break
+            child = child.get_next_sibling()
+
+        if not image_overlay:
+            return
+
+        # Create overlay widget
+        overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        overlay.add_css_class("upscale-overlay-small")
+        overlay.set_halign(Gtk.Align.CENTER)
+        overlay.set_valign(Gtk.Align.CENTER)
+
+        # Spinner
+        spinner = Gtk.Spinner(spinning=True)
+        spinner.set_size_request(24, 24)
+        overlay.append(spinner)
+
+        # Add to image overlay (stacked on top, no layout impact)
+        image_overlay.add_overlay(overlay)
+        self._upscale_overlays[card] = overlay
+
+    def _hide_upscale_overlay(self, card):
+        """Hide blocking overlay from the card."""
+        if card not in self._upscale_overlays:
+            return
+
+        overlay = self._upscale_overlays.pop(card)
+
+        # Find the image_overlay
+        image_overlay = None
+        child = card.get_first_child()
+        while child:
+            if isinstance(child, Gtk.Overlay):
+                image_overlay = child
+                break
+            child = child.get_next_sibling()
+
+        if image_overlay:
+            image_overlay.remove_overlay(overlay)
+
+    def _on_upscale_complete(self, view_model, success: bool, message: str, wallpaper_path: str):
+        """Handle upscaling completion."""
+        if success:
+            if self.toast_service:
+                self.toast_service.show_success(message)
+            # Find and refresh the card by path
+            card = self._path_card_map.get(wallpaper_path)
+            if card:
+                self._hide_upscale_overlay(card)
+                self._refresh_wallpaper_card_by_path(wallpaper_path)
+            else:
+                # Fallback: search in wallpaper map
+                for wp in self.view_model.wallpapers:
+                    if wp in self._wallpaper_card_map:
+                        card = self._wallpaper_card_map[wp]
+                        self._hide_upscale_overlay(card)
+                        self._refresh_wallpaper_card(wp)
+                        break
+        else:
+            if self.toast_service:
+                self.toast_service.show_error(message)
+            # Hide overlay even on failure
+            for wp in self.view_model.wallpapers:
+                if wp in self._wallpaper_card_map:
+                    card = self._wallpaper_card_map[wp]
+                    if card in self._upscale_overlays:
+                        self._hide_upscale_overlay(card)
+                    break
+
+    def _on_queue_changed(self, view_model, queue_size: int, active_count: int):
+        """Handle queue status changes."""
+        if queue_size == 0 and active_count == 0:
+            if self.toast_service:
+                self.toast_service.show_info("All upscaling complete")
+        elif active_count > 0:
+            if self.toast_service:
+                if queue_size > 0:
+                    self.toast_service.show_info(
+                        f"Upscaling {active_count} item(s), {queue_size} in queue..."
+                    )
+                else:
+                    self.toast_service.show_info(f"Upscaling {active_count} item(s)...")
+
+    def _refresh_wallpaper_card(self, wallpaper):
+        """Refresh a single wallpaper card with visual flash effect."""
+        card = self._wallpaper_card_map.get(wallpaper)
+        if not card:
+            return
+
+        # Get the image widget (first child after any overlays)
+        image = card.get_first_child()
+        if not image:
+            return
+
+        # Load new thumbnail
+        def on_thumbnail_loaded(texture):
+            if texture:
+                image.set_paintable(texture)
+
+        if self.thumbnail_loader:
+            self.thumbnail_loader.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
+
+        # Add flash effect
+        card.add_css_class("flash-animation")
+        GLib.timeout_add(100, lambda: card.remove_css_class("flash-animation"))
+        GLib.timeout_add(200, lambda: card.add_css_class("flash-animation"))
+        GLib.timeout_add(300, lambda: card.remove_css_class("flash-animation"))
+
+    def _refresh_wallpaper_card_by_path(self, path: str):
+        """Refresh a wallpaper card by path string."""
+        card = self._path_card_map.get(path)
+        if not card:
+            return
+
+        # Get the image widget (first child is Overlay, get its child)
+        first_child = card.get_first_child()
+        if not first_child or not isinstance(first_child, Gtk.Overlay):
+            return
+
+        image = first_child.get_child()
+        if not image or not isinstance(image, Gtk.Picture):
+            return
+
+        # Load new thumbnail
+        def on_thumbnail_loaded(texture):
+            if texture:
+                image.set_paintable(texture)
+
+        if self.thumbnail_loader:
+            self.thumbnail_loader.load_thumbnail_async(path, on_thumbnail_loaded)
+
+        # Update metadata labels with new resolution and size
+        metadata_label = self._metadata_labels.get(path)
+        if metadata_label and self.thumbnail_loader:
+            # Reload resolution and size from file
+            try:
+                from PIL import Image
+                import os
+
+                file_path = path
+                file_stat = os.stat(file_path)
+
+                # Get resolution
+                resolution_text = ""
+                try:
+                    with Image.open(file_path) as img:
+                        width, height = img.size
+                        resolution_text = f"{width}x{height}"
+                except Exception:
+                    pass
+
+                # Get size
+                size = file_stat.st_size
+                if size >= 1024 * 1024:
+                    size_str = f"{size / (1024 * 1024):.1f} MB"
+                elif size >= 1024:
+                    size_str = f"{size / 1024:.1f} KB"
+                else:
+                    size_str = f"{size} B"
+
+                # Update label
+                parts = []
+                if resolution_text:
+                    parts.append(resolution_text)
+                parts.append(size_str)
+                metadata_label.set_text(" • ".join(parts) if parts else "")
+            except Exception:
+                pass
+
+        # Add flash effect
+        card.add_css_class("flash-animation")
+        GLib.timeout_add(100, lambda: card.remove_css_class("flash-animation"))
+        GLib.timeout_add(200, lambda: card.add_css_class("flash-animation"))
+        GLib.timeout_add(300, lambda: card.remove_css_class("flash-animation"))
 
     def _reset_refresh_flag(self):
         """Reset refreshing flag."""
