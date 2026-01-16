@@ -1,8 +1,8 @@
 # Maintainer: Gotar <gotar@users.noreply.github.com>
 pkgname=wallpicker
-pkgver=2.0.0
+pkgver=2.1.0
 pkgrel=1
-pkgdesc="Modern GTK4/Libadwaita wallpaper picker with Wallhaven integration"
+pkgdesc="Modern GTK4/Libadwaita wallpaper picker with Wallhaven integration and AI upscaling"
 arch=('any')
 url="https://github.com/gotar/WallPicker"
 license=('MIT')
@@ -18,7 +18,8 @@ depends=(
   'python-rapidfuzz'
 )
 makedepends=('python-setuptools' 'python-wheel' 'python-build' 'python-installer')
-optdepends=('awww: Animated wallpaper transitions')
+optdepends=('awww: Animated wallpaper transitions'
+            'waifu2x-ncnn-vulkan: AI upscaling for local wallpapers')
 source=("${pkgname}::git+https://github.com/gotar/WallPicker.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 
@@ -44,6 +45,7 @@ package() {
 
   # Install documentation
   install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 CHANGELOG.md "${pkgdir}/usr/share/doc/${pkgname}/CHANGELOG.md"
 
   # Install license
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
