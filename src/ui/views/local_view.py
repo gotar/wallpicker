@@ -332,21 +332,31 @@ class LocalView(Adw.BreakpointBin):
         self.update_status(len(self.view_model.wallpapers))
 
     def update_wallpaper_grid(self, wallpapers):
-        """Update wallpaper grid with new wallpapers"""
+        """Update wallpaper grid incrementally - avoid full rebuild if possible."""
 
-        def clear_and_update():
-            while child := self.wallpaper_grid.get_first_child():
-                self.wallpaper_grid.remove(child)
+        def update_grid():
+            current_paths = set(self._path_card_map.keys())
+            new_paths = {str(w.path) for w in wallpapers}
 
-            self.card_wallpaper_map.clear()
+            removed_paths = current_paths - new_paths
+            added_wallpapers = [w for w in wallpapers if str(w.path) not in current_paths]
 
-            for wallpaper in wallpapers:
+            for path in removed_paths:
+                card = self._path_card_map.pop(path, None)
+                if card:
+                    wp = self.card_wallpaper_map.pop(card, None)
+                    if wp:
+                        self._wallpaper_card_map.pop(wp, None)
+                    self._metadata_labels.pop(path, None)
+                    self.wallpaper_grid.remove(card)
+
+            for wallpaper in added_wallpapers:
                 card = self._create_wallpaper_card(wallpaper)
                 self.wallpaper_grid.append(card)
 
             return False
 
-        GLib.idle_add(clear_and_update)
+        GLib.idle_add(update_grid)
 
     def _create_wallpaper_card(self, wallpaper):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)

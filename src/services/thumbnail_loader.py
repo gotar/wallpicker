@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class ThumbnailLoader:
     """Service for loading thumbnails asynchronously."""
 
-    def __init__(self, thumbnail_cache=None, max_workers: int = 4):
+    def __init__(self, thumbnail_cache=None, max_workers: int = 8):
         """Initialize thumbnail loader.
 
         Args:
@@ -45,19 +45,12 @@ class ThumbnailLoader:
         def _load_thumbnail():
             try:
                 # Handle remote URLs with caching
-                if (
-                    path_or_url.startswith(("http://", "https://"))
-                    and self._thumbnail_cache
-                ):
+                if path_or_url.startswith(("http://", "https://")) and self._thumbnail_cache:
                     logger.info(f"Loading thumbnail from URL: {path_or_url[:60]}...")
-                    thumbnail_path = self._thumbnail_cache.get_or_download_sync(
-                        path_or_url
-                    )
+                    thumbnail_path = self._thumbnail_cache.get_or_download_sync(path_or_url)
                     if thumbnail_path and thumbnail_path.exists():
                         texture = Gdk.Texture.new_from_filename(str(thumbnail_path))
-                        logger.debug(
-                            f"Thumbnail loaded successfully: {thumbnail_path.name}"
-                        )
+                        logger.debug(f"Thumbnail loaded successfully: {thumbnail_path.name}")
                         GLib.idle_add(lambda: callback(texture))
                         return
 
@@ -69,9 +62,7 @@ class ThumbnailLoader:
                     GLib.idle_add(lambda: callback(texture))
                     return
             except (OSError, Exception) as e:
-                logger.error(
-                    f"Failed to load thumbnail from {path_or_url}: {e}", exc_info=True
-                )
+                logger.error(f"Failed to load thumbnail from {path_or_url}: {e}", exc_info=True)
 
             # Invoke callback with None if loading failed
             GLib.idle_add(lambda: callback(None))

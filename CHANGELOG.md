@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-01-17
+
+### Fixed
+- **Critical startup performance**: Removed synchronous image resolution reading during wallpaper scan
+  - Resolution now lazy-loaded only when displayed
+  - 626 wallpapers load in ~0.01s vs seconds before
+- **UI responsiveness**: Incremental grid updates instead of full rebuild on refresh
+- **Thumbnail loading**: Increased parallel workers from 4 to 8
+
+### Changed
+- About dialog now reads version from package metadata (importlib.metadata)
+- License format updated to SPDX standard in pyproject.toml
+
+## [2.2.0] - 2026-01-16
+
+### Added
+- About dialog with dynamic version display
+- Version management connected to pyproject.toml
+
 ## [2.1.0] - 2026-01-16
 
 ### Added

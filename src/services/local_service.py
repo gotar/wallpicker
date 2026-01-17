@@ -8,7 +8,6 @@ import logging
 from pathlib import Path
 
 from gi.repository import GObject
-from PIL import Image
 from rapidfuzz import fuzz, process
 from send2trash import send2trash
 
@@ -29,7 +28,27 @@ class LocalWallpaper(GObject.Object):
         self.filename = filename
         self.size = size
         self.modified_time = modified_time
-        self.resolution = resolution
+        self._resolution = resolution
+
+    @property
+    def resolution(self):
+        if self._resolution is None:
+            self._load_resolution()
+        return self._resolution
+
+    @resolution.setter
+    def resolution(self, value):
+        self._resolution = value
+
+    def _load_resolution(self):
+        try:
+            from PIL import Image
+
+            with Image.open(self.path) as img:
+                width, height = img.size
+                self._resolution = f"{width}x{height}"
+        except Exception:
+            self._resolution = ""
 
 
 class LocalWallpaperService:
@@ -45,9 +64,7 @@ class LocalWallpaperService:
     def get_wallpapers(self, recursive: bool = True) -> list[LocalWallpaper]:
         return self._get_wallpapers_sync(recursive=recursive)
 
-    async def get_wallpapers_async(
-        self, recursive: bool = True
-    ) -> list[LocalWallpaper]:
+    async def get_wallpapers_async(self, recursive: bool = True) -> list[LocalWallpaper]:
         return await asyncio.to_thread(self._get_wallpapers_sync, recursive)
 
     def _get_wallpapers_sync(self, recursive: bool = True) -> list[LocalWallpaper]:
@@ -69,30 +86,17 @@ class LocalWallpaperService:
                 pattern = "*"
 
             for file_path in self.pictures_dir.glob(pattern):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
-                ):
+                if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
                     stat = file_path.stat()
 
-                    # Get image resolution
-                    resolution = None
-                    try:
-                        with Image.open(file_path) as img:
-                            width, height = img.size
-                            resolution = f"{width}x{height}"
-                    except (OSError, ValueError) as e:
-                        logging.debug(
-                            f"Could not read image dimensions from {file_path}: {e}"
-                        )
-
+                    # Defer resolution reading - too expensive at scan time
                     wallpapers.append(
                         LocalWallpaper(
                             path=file_path,
                             filename=file_path.name,
                             size=stat.st_size,
                             modified_time=stat.st_mtime,
-                            resolution=resolution,
+                            resolution=None,
                         )
                     )
 
