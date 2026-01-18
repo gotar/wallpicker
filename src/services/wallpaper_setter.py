@@ -3,28 +3,30 @@ import logging
 import subprocess
 from pathlib import Path
 
+from core.asyncio_integration import get_event_loop
+
 
 class WallpaperSetter:
     def __init__(self):
         self.cache_dir = Path.home() / ".cache" / "wallpaper"
-        self.symlink_path = (
-            Path.home() / ".config" / "omarchy" / "current" / "background"
-        )
+        self.symlink_path = Path.home() / ".config" / "omarchy" / "current" / "background"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symlink_path.parent.mkdir(parents=True, exist_ok=True)
 
     def set_wallpaper(self, image_path: str) -> bool:
+        """Set wallpaper synchronously, using the global event loop."""
         try:
-            loop = asyncio.get_running_loop()
+            loop = get_event_loop()
+            future = asyncio.run_coroutine_threadsafe(self.set_wallpaper_async(image_path), loop)
+            # Use timeout to avoid blocking forever
+            return future.result(timeout=30)
         except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            return asyncio.run_coroutine_threadsafe(
-                self.set_wallpaper_async(image_path), loop
-            ).result()
-
-        return asyncio.run(self.set_wallpaper_async(image_path))
+            # Event loop not set up, run synchronously
+            return asyncio.run(self.set_wallpaper_async(image_path))
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to set wallpaper: {e}", exc_info=True)
+            return False
 
     async def set_wallpaper_async(self, image_path: str) -> bool:
         path = Path(image_path)

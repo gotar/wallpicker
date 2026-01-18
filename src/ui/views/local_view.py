@@ -1,4 +1,4 @@
-"""View for local wallpaper browsing."""
+"""View for local wallpaper browsing with pagination support."""
 
 import sys
 from pathlib import Path
@@ -16,9 +16,15 @@ from core.asyncio_integration import schedule_async  # noqa: E402
 from ui.components.search_filter_bar import SearchFilterBar  # noqa: E402
 from ui.view_models.local_view_model import LocalViewModel  # noqa: E402
 
+# Pagination settings for lazy loading
+INITIAL_PAGE_SIZE = 50
+PAGE_SIZE = 50
+LOAD_MORE_THRESHOLD = 200
+MAX_VISIBLE_ITEMS = 300
+
 
 class LocalView(Adw.BreakpointBin):
-    """View for local wallpaper browsing with adaptive layout"""
+    """View for local wallpaper browsing with adaptive layout and pagination"""
 
     def __init__(
         self,
@@ -46,16 +52,102 @@ class LocalView(Adw.BreakpointBin):
         self._metadata_labels = {}
         self._needs_full_rebuild = False
 
+        # Pagination state
+        self._all_wallpapers = []
+        self._visible_wallpapers = []
+        self._current_page = 0
+        self._is_loading_more = False
+        self._has_more_items = True
+
         self._create_ui()
 
         self._setup_keyboard_shortcuts()
         self._bind_to_view_model()
         self._bind_upscale_signal()
+        self._setup_scroll_detection()
 
     def _bind_upscale_signal(self):
         """Connect to upscaling signals."""
         self.view_model.connect("upscaling-complete", self._on_upscale_complete)
         self.view_model.connect("upscaling-queue-changed", self._on_queue_changed)
+
+    def _setup_scroll_detection(self):
+        """Setup scroll detection for lazy loading."""
+        self._is_loading_more = False
+        self._has_more_items = True
+        vadj = self.scroll.get_vadjustment()
+        vadj.connect("value-changed", self._on_scroll_changed)
+
+    def _on_scroll_changed(self, adjustment):
+        """Handle scroll position changes for lazy loading."""
+        if self._is_loading_more or not self._has_more_items:
+            return
+        value = adjustment.get_value()
+        page_size = adjustment.get_page_size()
+        upper = adjustment.get_upper()
+        remaining = upper - (value + page_size)
+        if remaining <= LOAD_MORE_THRESHOLD:
+            self._load_more_items()
+
+    def _load_more_items(self):
+        """Load more items for lazy loading."""
+        if self._is_loading_more or not self._has_more_items:
+            return
+
+        self._is_loading_more = True
+        current_count = len(self._visible_wallpapers)
+        next_count = current_count + PAGE_SIZE
+
+        if next_count >= len(self._all_wallpapers):
+            next_count = len(self._all_wallpapers)
+            self._has_more_items = False
+
+        new_wallpapers = self._all_wallpapers[current_count:next_count]
+
+        if not new_wallpapers:
+            self._is_loading_more = False
+            return
+
+        for wallpaper in new_wallpapers:
+            card = self._create_wallpaper_card(wallpaper)
+            self.wallpaper_grid.append(card)
+
+        self._visible_wallpapers = self._all_wallpapers[:next_count]
+        self._current_page += 1
+        self._is_loading_more = False
+        self.update_status(len(self._all_wallpapers))
+
+        self._clear_old_items()
+
+    def _clear_old_items(self):
+        """Clear oldest items when exceeding max visible to manage memory."""
+        if len(self._visible_wallpapers) <= MAX_VISIBLE_ITEMS:
+            return
+
+        items_to_remove = len(self._visible_wallpapers) - MAX_VISIBLE_ITEMS
+        keep_from = items_to_remove
+
+        child = self.wallpaper_grid.get_first_child()
+        for _ in range(items_to_remove):
+            if child:
+                next_child = child.get_next_sibling()
+                self._remove_card_mappings(child)
+                self.wallpaper_grid.remove(child)
+                child = next_child
+
+        self._visible_wallpapers = self._visible_wallpapers[keep_from:]
+
+    def _remove_card_mappings(self, card):
+        """Remove all mappings for a card."""
+        if card in self.card_wallpaper_map:
+            wp = self.card_wallpaper_map.pop(card)
+            self._wallpaper_card_map.pop(wp, None)
+            self._path_card_map.pop(str(wp.path), None)
+        for path, existing_card in list(self._path_card_map.items()):
+            if existing_card == card:
+                self._path_card_map.pop(path, None)
+                self._metadata_labels.pop(path, None)
+                break
 
     def _create_ui(self):
         """Create main UI structure"""
@@ -334,34 +426,42 @@ class LocalView(Adw.BreakpointBin):
         dialog.select_folder(window, None, on_folder_selected)
 
     def _on_wallpapers_changed(self, obj, pspec):
-        """Handle wallpapers property change"""
-        self.update_wallpaper_grid(self.view_model.wallpapers)
-        self.update_status(len(self.view_model.wallpapers))
+        """Handle wallpapers property change with pagination."""
+        wallpapers = self.view_model.wallpapers
+        self._all_wallpapers = wallpapers
+        self._visible_wallpapers = []
+        self._current_page = 0
+        self._has_more_items = len(wallpapers) > INITIAL_PAGE_SIZE
 
-    def update_wallpaper_grid(self, wallpapers):
-        if self._needs_full_rebuild:
-            self._needs_full_rebuild = False
-            self._rebuild_wallpaper_grid(wallpapers)
-            return
+        # Clear existing grid
+        self._clear_grid()
 
-        current_paths = set(self._path_card_map.keys())
-        new_paths = {str(w.path) for w in wallpapers}
-
-        removed_paths = current_paths - new_paths
-        added_wallpapers = [w for w in wallpapers if str(w.path) not in current_paths]
-
-        for path in removed_paths:
-            card = self._path_card_map.pop(path, None)
-            if card:
-                wp = self.card_wallpaper_map.pop(card, None)
-                if wp:
-                    self._wallpaper_card_map.pop(wp, None)
-                self._metadata_labels.pop(path, None)
-                self.wallpaper_grid.remove(card)
-
-        for wallpaper in added_wallpapers:
+        # Load initial batch
+        initial_batch = wallpapers[:INITIAL_PAGE_SIZE]
+        for wallpaper in initial_batch:
             card = self._create_wallpaper_card(wallpaper)
             self.wallpaper_grid.append(card)
+
+        self._visible_wallpapers = initial_batch
+        self.update_status(len(wallpapers))
+
+    def update_wallpaper_grid(self, wallpapers):
+        # With pagination, full rebuild handles everything
+        self._on_wallpapers_changed(None, None)
+
+    def _clear_grid(self):
+        """Clear all cards from the grid."""
+        child = self.wallpaper_grid.get_first_child()
+        while child:
+            next_child = child.get_next_sibling()
+            self.wallpaper_grid.remove(child)
+            self._remove_card_mappings(child)
+            child = next_child
+        self.card_wallpaper_map.clear()
+        self._wallpaper_card_map.clear()
+        self._path_card_map.clear()
+        self._metadata_labels.clear()
+        self._upscale_overlays.clear()
 
     def _rebuild_wallpaper_grid(self, wallpapers):
         child = self.wallpaper_grid.get_first_child()

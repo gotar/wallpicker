@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from gi.repository import GLib, GObject  # type: ignore
 
-from core.asyncio_integration import schedule_async
+from core.asyncio_integration import get_event_loop, schedule_async
 from domain.favorite import Favorite
 from domain.wallpaper import (
     Wallpaper,  # noqa: E402
@@ -103,9 +103,7 @@ class FavoritesViewModel(BaseViewModel):
             if not query or query.strip() == "":
                 await self.load_favorites()
             else:
-                results = await asyncio.to_thread(
-                    self.favorites_service.search_favorites, query
-                )
+                results = await asyncio.to_thread(self.favorites_service.search_favorites, query)
                 GLib.idle_add(self._set_favorites, results)
 
         except Exception as e:
@@ -122,81 +120,27 @@ class FavoritesViewModel(BaseViewModel):
         source: str,
         tags: str,
     ) -> bool:
+        """Synchronous version of add_favorite using global event loop."""
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            return asyncio.run_coroutine_threadsafe(
+            loop = get_event_loop()
+            future = asyncio.run_coroutine_threadsafe(
                 self.add_favorite(wallpaper_id, full_url, path, source, tags),
                 loop,
-            ).result()
-
-        return asyncio.run(
-            self.add_favorite(wallpaper_id, full_url, path, source, tags)
-        )
-
-    async def add_favorite(
-        self,
-        wallpaper_id: str,
-        full_url: str,
-        path: str,
-        source: str,
-        tags: str,
-    ) -> bool:
-        try:
-            self.is_busy = True
-            self.error_message = None
-
-            if await asyncio.to_thread(self.is_favorite, wallpaper_id):
-                self._show_toast("Already in favorites", "warning")
-                return False
-
-            from domain.wallpaper import Resolution, Wallpaper, WallpaperSource
-
-            source_enum = source
-            if isinstance(source, str):
-                if source == "local":
-                    source_enum = WallpaperSource.LOCAL
-                elif source == "wallhaven":
-                    source_enum = WallpaperSource.WALLHAVEN
-                elif source == "favorite":
-                    source_enum = WallpaperSource.FAVORITE
-                else:
-                    source_enum = WallpaperSource.LOCAL
-
-            wallpaper = Wallpaper(
-                id=wallpaper_id,
-                url=full_url,
-                path=path,
-                resolution=Resolution(width=1920, height=1080),
-                purity=WallpaperPurity.SFW,
-                category="general",
-                source=source_enum,
             )
-
-            await asyncio.to_thread(self.favorites_service.add_favorite, wallpaper)
-            schedule_async(self.load_favorites())
-            self._show_toast("Added to favorites", "success")
-
-            return True
-
+            return future.result(timeout=30)
+        except RuntimeError:
+            # Event loop not set up, run synchronously (last resort)
+            return asyncio.run(self.add_favorite(wallpaper_id, full_url, path, source, tags))
         except Exception as e:
-            self.error_message = f"Failed to add favorite: {e}"
-            self._show_toast(f"Failed to add favorite: {e}", "error")
+            logger.error(f"Failed to add favorite synchronously: {e}")
             return False
-        finally:
-            self.is_busy = False
 
     async def remove_favorite(self, wallpaper_id: str) -> bool:
         try:
             self.is_busy = True
             self.error_message = None
 
-            await asyncio.to_thread(
-                self.favorites_service.remove_favorite, wallpaper_id
-            )
+            await asyncio.to_thread(self.favorites_service.remove_favorite, wallpaper_id)
             schedule_async(self.load_favorites())
             self._show_toast("Removed from favorites", "success")
 
@@ -214,9 +158,7 @@ class FavoritesViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            result = await self.wallpaper_setter.set_wallpaper_async(
-                favorite.wallpaper.path
-            )
+            result = await self.wallpaper_setter.set_wallpaper_async(favorite.wallpaper.path)
 
             if result:
                 self.emit("wallpaper-set", favorite.wallpaper.id)
@@ -255,17 +197,11 @@ class FavoritesViewModel(BaseViewModel):
                         return False, "Configuration not available"
 
                     filename = f"{wallpaper.id}.{path.rsplit('.', 1)[-1]}"
-                    dest_path = (
-                        config.local_wallpapers_dir or Path.home() / "Pictures"
-                    ) / filename
+                    dest_path = (config.local_wallpapers_dir or Path.home() / "Pictures") / filename
 
                     if not dest_path.exists():
-                        logger.info(
-                            f"Downloading wallpaper {wallpaper.id} to {dest_path}"
-                        )
-                        success = await self.wallhaven_service.download(
-                            wallpaper, dest_path
-                        )
+                        logger.info(f"Downloading wallpaper {wallpaper.id} to {dest_path}")
+                        success = await self.wallhaven_service.download(wallpaper, dest_path)
                         if not success:
                             return False, "Failed to download wallpaper"
                     else:

@@ -363,7 +363,6 @@ class SearchFilterBar(Gtk.Box):
         return False  # Don't repeat
 
     def _on_sort_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
-        """Handle sort dropdown selection change."""
         selected = dropdown.get_selected()
         if selected != Gtk.INVALID_LIST_POSITION and selected in self._sort_mapping:
             sort_value = self._sort_mapping[selected]
@@ -372,9 +371,6 @@ class SearchFilterBar(Gtk.Box):
 
             if self._on_sort_changed_callback:
                 self._on_sort_changed_callback(sort_value)
-
-            if self._on_filter_changed_callback:
-                self._on_filter_changed_callback(self._active_filters)
 
     def _get_sort_display_name(self, value: str) -> str:
         """Get display name for sort value."""

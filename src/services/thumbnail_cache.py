@@ -7,6 +7,7 @@ from pathlib import Path
 
 import aiohttp
 
+from core.asyncio_integration import get_event_loop
 from domain.exceptions import ServiceError
 from services.base import BaseService
 
@@ -162,15 +163,31 @@ class ThumbnailCache(BaseService):
         Raises:
             ServiceError: If download fails
         """
+        # Check if it's a local file - return directly
+        path = Path(url)
+        if path.exists() and path.is_file():
+            return path
+
+        # Check cache first
+        cached = self.get_thumbnail(url)
+        if cached:
+            return cached
+
+        # Need to download - use global event loop
         try:
-            loop = asyncio.get_running_loop()
+            loop = get_event_loop()
+            future = asyncio.run_coroutine_threadsafe(self._download_with_session(url), loop)
+            return future.result(timeout=60)
         except RuntimeError:
-            loop = None
+            # Event loop not set up, run synchronously (last resort)
+            return asyncio.run(self._download_with_session(url))
+        except Exception as e:
+            raise ServiceError(f"Failed to download thumbnail: {e}") from e
 
-        if loop and loop.is_running():
-            return asyncio.run_coroutine_threadsafe(self.get_or_download_async(url), loop).result()
-
-        return asyncio.run(self.get_or_download_async(url))
+    async def _download_with_session(self, url: str) -> Path:
+        """Download thumbnail with aiohttp session."""
+        async with aiohttp.ClientSession() as session:
+            return await self.download_and_cache(url, session)
 
     async def get_or_download_async(self, url: str) -> Path:
         path = Path(url)
