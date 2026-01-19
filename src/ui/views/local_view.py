@@ -165,9 +165,7 @@ class LocalView(Adw.BreakpointBin):
         toolbar_wrapper.add_css_class("toolbar-wrapper")
         self.main_box.append(toolbar_wrapper)
 
-        folder_btn = Gtk.Button(
-            icon_name="folder-symbolic", tooltip_text="Choose folder"
-        )
+        folder_btn = Gtk.Button(icon_name="folder-symbolic", tooltip_text="Choose folder")
         folder_btn.connect("clicked", self._on_folder_clicked)
         toolbar_wrapper.append(folder_btn)
 
@@ -441,9 +439,25 @@ class LocalView(Adw.BreakpointBin):
 
         # Debug: log the path we're looking for
         print(f"[DEBUG] Looking for current wallpaper: {current_path}")
-        print(
-            f"[DEBUG] Number of wallpapers in full list: {len(self._full_wallpapers)}"
-        )
+        print(f"[DEBUG] Number of wallpapers in full list: {len(self._full_wallpapers)}")
+
+        # Check for near matches
+        current_name = Path(current_path).name
+        print(f"[DEBUG] Current filename: {current_name}")
+
+        found_in_full = any(str(wp.path) == current_path for wp in self._full_wallpapers)
+        print(f"[DEBUG] Exact match found in full list: {found_in_full}")
+
+        if not found_in_full:
+            # Check if any file has the same name
+            same_name = [
+                str(wp.path) for wp in self._full_wallpapers if wp.path.name == current_name
+            ]
+            if same_name:
+                print(f"[DEBUG] Found files with same name: {same_name}")
+            else:
+                print(f"[DEBUG] No files with name {current_name} found in list")
+
         if self._full_wallpapers:
             sample_paths = [str(wp.path) for wp in self._full_wallpapers[:3]]
             print(f"[DEBUG] Sample paths: {sample_paths}")
@@ -699,18 +713,14 @@ class LocalView(Adw.BreakpointBin):
         actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
 
-        set_btn = Gtk.Button(
-            icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper"
-        )
+        set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
         set_btn.add_css_class("suggested-action")
         set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
-        fav_btn = Gtk.Button(
-            icon_name="starred-symbolic", tooltip_text="Add to favorites"
-        )
+        fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
         fav_btn.add_css_class("action-button")
         fav_btn.add_css_class("favorite-action")
         fav_btn.set_cursor_from_name("pointer")
@@ -726,9 +736,7 @@ class LocalView(Adw.BreakpointBin):
 
         # Show upscale button only if enabled in config
         if self._is_upscaler_enabled():
-            upscale_btn = Gtk.Button(
-                icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)"
-            )
+            upscale_btn = Gtk.Button(icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)")
             upscale_btn.add_css_class("action-button")
             upscale_btn.set_cursor_from_name("pointer")
             upscale_btn.connect("clicked", self._on_upscale_wallpaper, wallpaper)
@@ -871,9 +879,7 @@ class LocalView(Adw.BreakpointBin):
         if image_overlay:
             image_overlay.remove_overlay(overlay)
 
-    def _on_upscale_complete(
-        self, view_model, success: bool, message: str, wallpaper_path: str
-    ):
+    def _on_upscale_complete(self, view_model, success: bool, message: str, wallpaper_path: str):
         """Handle upscaling completion."""
         if success:
             if self.toast_service:
@@ -933,9 +939,7 @@ class LocalView(Adw.BreakpointBin):
                 image.set_paintable(texture)
 
         if self.thumbnail_loader:
-            self.thumbnail_loader.load_thumbnail_async(
-                str(wallpaper.path), on_thumbnail_loaded
-            )
+            self.thumbnail_loader.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
 
         # Add flash effect
         card.add_css_class("flash-animation")
