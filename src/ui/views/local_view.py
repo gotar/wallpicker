@@ -164,7 +164,9 @@ class LocalView(Adw.BreakpointBin):
         toolbar_wrapper.add_css_class("toolbar-wrapper")
         self.main_box.append(toolbar_wrapper)
 
-        folder_btn = Gtk.Button(icon_name="folder-symbolic", tooltip_text="Choose folder")
+        folder_btn = Gtk.Button(
+            icon_name="folder-symbolic", tooltip_text="Choose folder"
+        )
         folder_btn.connect("clicked", self._on_folder_clicked)
         toolbar_wrapper.append(folder_btn)
 
@@ -243,6 +245,9 @@ class LocalView(Adw.BreakpointBin):
         )
         self.view_model.connect("notify::wallpapers", self._on_wallpapers_changed)
         self.view_model.connect("notify::selected-count", self._on_selection_changed)
+        self.view_model.connect(
+            "notify::current-wallpaper-path", self._on_current_wallpaper_changed
+        )
 
     def _setup_keyboard_shortcuts(self):
         key_controller = Gtk.EventControllerKey()
@@ -293,6 +298,10 @@ class LocalView(Adw.BreakpointBin):
             return True
         elif keyval == Gdk.KEY_Escape:
             self.view_model.clear_selection()
+            return True
+        # Home: Scroll to current wallpaper
+        elif keyval == Gdk.KEY_Home:
+            self.scroll_to_current_wallpaper()
             return True
         return False
 
@@ -376,6 +385,9 @@ class LocalView(Adw.BreakpointBin):
         elif keyval == Gdk.KEY_Escape:
             self.view_model.clear_selection()
             return True
+        elif keyval == Gdk.KEY_Home:
+            self.scroll_to_current_wallpaper()
+            return True
         return False
 
     def _on_selection_changed(self, obj, pspec):
@@ -386,6 +398,65 @@ class LocalView(Adw.BreakpointBin):
             )
         elif count == 0 and self.banner_service:
             self.banner_service.hide_selection_banner()
+
+    def _on_current_wallpaper_changed(self, obj, pspec):
+        """Handle current wallpaper path change - update card highlights."""
+        self._update_current_wallpaper_highlight()
+
+    def _update_current_wallpaper_highlight(self):
+        """Update CSS classes to highlight the currently set wallpaper."""
+        current_path = self.view_model.current_wallpaper_path
+        if not current_path:
+            return
+
+        # Remove current-wallpaper class from all cards
+        for _wallpaper, card in self._wallpaper_card_map.items():
+            card.remove_css_class("current-wallpaper")
+
+        # Add current-wallpaper class to matching card
+        card = self._path_card_map.get(current_path)
+        if card:
+            card.add_css_class("current-wallpaper")
+
+    def scroll_to_current_wallpaper(self):
+        """Scroll the scrolled window to show the currently set wallpaper."""
+        current_path = self.view_model.current_wallpaper_path
+        if not current_path:
+            if self.toast_service:
+                self.toast_service.show_info("No current wallpaper found")
+            return
+
+        card = self._path_card_map.get(current_path)
+        if not card:
+            if self.toast_service:
+                self.toast_service.show_info("Current wallpaper not in list")
+            return
+
+        # Scroll to make the card visible
+        self._scroll_to_card(card)
+
+    def _scroll_to_card(self, card):
+        """Scroll the scrolled window to make the given card visible."""
+        # Get the adjustment values
+        vadj = self.scroll.get_vadjustment()
+
+        # Get card's allocation
+        allocation = card.get_allocation()
+        card_y = allocation.y
+        card_height = allocation.height
+
+        # Get scroll window dimensions
+        scroll_height = vadj.get_page_size()
+        scroll_upper = vadj.get_upper()
+
+        # Calculate scroll position to center the card
+        new_y = card_y - (scroll_height - card_height) // 2
+
+        # Clamp to valid range
+        new_y = max(0, min(new_y, scroll_upper - scroll_height))
+
+        # Animate the scroll
+        vadj.set_value(new_y)
 
     def _on_set_all_selected(self):
         selected = self.view_model.get_selected_wallpapers()
@@ -444,6 +515,10 @@ class LocalView(Adw.BreakpointBin):
 
         self._visible_wallpapers = initial_batch
         self.update_status(len(wallpapers))
+
+        # Refresh and highlight current wallpaper
+        self.view_model.refresh_current_wallpaper()
+        self._update_current_wallpaper_highlight()
 
     def update_wallpaper_grid(self, wallpapers):
         # With pagination, full rebuild handles everything
@@ -504,6 +579,11 @@ class LocalView(Adw.BreakpointBin):
             card.add_css_class("selected")
         if self.view_model.selection_mode:
             card.add_css_class("selection-mode")
+
+        # Highlight current wallpaper
+        current_path = self.view_model.current_wallpaper_path
+        if current_path and str(wallpaper.path) == current_path:
+            card.add_css_class("current-wallpaper")
 
         image = Gtk.Picture()
         image.set_size_request(200, 160)
@@ -570,14 +650,18 @@ class LocalView(Adw.BreakpointBin):
         actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
 
-        set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
+        set_btn = Gtk.Button(
+            icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper"
+        )
         set_btn.add_css_class("action-button")
         set_btn.add_css_class("suggested-action")
         set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
-        fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
+        fav_btn = Gtk.Button(
+            icon_name="starred-symbolic", tooltip_text="Add to favorites"
+        )
         fav_btn.add_css_class("action-button")
         fav_btn.add_css_class("favorite-action")
         fav_btn.set_cursor_from_name("pointer")
@@ -593,7 +677,9 @@ class LocalView(Adw.BreakpointBin):
 
         # Show upscale button only if enabled in config
         if self._is_upscaler_enabled():
-            upscale_btn = Gtk.Button(icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)")
+            upscale_btn = Gtk.Button(
+                icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)"
+            )
             upscale_btn.add_css_class("action-button")
             upscale_btn.set_cursor_from_name("pointer")
             upscale_btn.connect("clicked", self._on_upscale_wallpaper, wallpaper)
@@ -736,7 +822,9 @@ class LocalView(Adw.BreakpointBin):
         if image_overlay:
             image_overlay.remove_overlay(overlay)
 
-    def _on_upscale_complete(self, view_model, success: bool, message: str, wallpaper_path: str):
+    def _on_upscale_complete(
+        self, view_model, success: bool, message: str, wallpaper_path: str
+    ):
         """Handle upscaling completion."""
         if success:
             if self.toast_service:
@@ -796,7 +884,9 @@ class LocalView(Adw.BreakpointBin):
                 image.set_paintable(texture)
 
         if self.thumbnail_loader:
-            self.thumbnail_loader.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
+            self.thumbnail_loader.load_thumbnail_async(
+                str(wallpaper.path), on_thumbnail_loaded
+            )
 
         # Add flash effect
         card.add_css_class("flash-animation")

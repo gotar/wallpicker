@@ -65,7 +65,9 @@ class SearchFilterBar(Gtk.Box):
         self.add_css_class("search-filter-bar")
 
         # Search entry
-        self.search_entry = Gtk.SearchEntry(placeholder_text=self._get_search_placeholder())
+        self.search_entry = Gtk.SearchEntry(
+            placeholder_text=self._get_search_placeholder()
+        )
         self.search_entry.set_hexpand(True)
         self.search_entry.set_size_request(300, -1)
         self.append(self.search_entry)
@@ -96,7 +98,9 @@ class SearchFilterBar(Gtk.Box):
             self._create_local_filter_popover()
 
         # Active filter chips (initially hidden)
-        self._chips_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._chips_container = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=8
+        )
         self._chips_container.add_css_class("filter-chips")
         self._chips_container.set_visible(False)
 
@@ -118,7 +122,9 @@ class SearchFilterBar(Gtk.Box):
         self.sort_dropdown.set_model(string_list)
 
         # Store sort mapping for value lookup
-        self._sort_mapping = {idx: value for idx, (_, value) in enumerate(self._sort_options_list)}
+        self._sort_mapping = {
+            idx: value for idx, (_, value) in enumerate(self._sort_options_list)
+        }
 
     def _get_sort_options(self) -> list[tuple[str, str]]:
         """Get sort options for current tab type.
@@ -332,7 +338,9 @@ class SearchFilterBar(Gtk.Box):
             self.purity_nsfw.connect("toggled", self._on_purity_toggled)
 
             # Resolution dropdown
-            self.resolution_dropdown.connect("notify::selected", self._on_resolution_changed)
+            self.resolution_dropdown.connect(
+                "notify::selected", self._on_resolution_changed
+            )
 
             # Advanced filters
             self.top_range_combo.connect("notify::selected", self._on_top_range_changed)
@@ -340,7 +348,9 @@ class SearchFilterBar(Gtk.Box):
             self.color_combo.connect("notify::selected", self._on_color_changed)
 
         elif self.tab_type == "local":
-            self.resolution_dropdown.connect("notify::selected", self._on_local_resolution_changed)
+            self.resolution_dropdown.connect(
+                "notify::selected", self._on_local_resolution_changed
+            )
             self.aspect_combo.connect("notify::selected", self._on_local_aspect_changed)
 
     def _on_search_entry_changed(self, entry: Gtk.SearchEntry):
@@ -546,7 +556,9 @@ class SearchFilterBar(Gtk.Box):
 
         self.filter_popover.popdown()
 
-    def _on_local_resolution_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+    def _on_local_resolution_changed(
+        self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec
+    ):
         selected = dropdown.get_selected()
         if selected == 0:
             self._remove_filter_chip_by_type("resolution")
@@ -565,7 +577,9 @@ class SearchFilterBar(Gtk.Box):
 
         self.filter_popover.popdown()
 
-    def _on_local_aspect_changed(self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec):
+    def _on_local_aspect_changed(
+        self, dropdown: Gtk.DropDown, pspec: GObject.ParamSpec
+    ):
         selected = dropdown.get_selected()
         if selected == 0:
             self._remove_filter_chip_by_type("ratios")

@@ -29,7 +29,8 @@ def local_view_model(mocker, tmp_path):
 
     # Mock GLib.idle_add to execute callback immediately
     mocker.patch(
-        "ui.view_models.local_view_model.GLib.idle_add", side_effect=lambda func, *args: func(*args)
+        "ui.view_models.local_view_model.GLib.idle_add",
+        side_effect=lambda func, *args: func(*args),
     )
 
     return LocalViewModel(local_service=mock_service, wallpaper_setter=mock_setter)
@@ -140,13 +141,22 @@ class TestLocalViewModelSorting:
         """Test sorting wallpapers by name."""
         local_view_model._wallpapers = [
             LocalWallpaper(
-                path=tmp_path / "zebra.jpg", filename="zebra.jpg", size=100, modified_time=1.0
+                path=tmp_path / "zebra.jpg",
+                filename="zebra.jpg",
+                size=100,
+                modified_time=1.0,
             ),
             LocalWallpaper(
-                path=tmp_path / "alpha.jpg", filename="alpha.jpg", size=100, modified_time=2.0
+                path=tmp_path / "alpha.jpg",
+                filename="alpha.jpg",
+                size=100,
+                modified_time=2.0,
             ),
             LocalWallpaper(
-                path=tmp_path / "beta.jpg", filename="beta.jpg", size=100, modified_time=3.0
+                path=tmp_path / "beta.jpg",
+                filename="beta.jpg",
+                size=100,
+                modified_time=3.0,
             ),
         ]
 
@@ -159,13 +169,22 @@ class TestLocalViewModelSorting:
         """Test sorting wallpapers by date (newest first)."""
         local_view_model._wallpapers = [
             LocalWallpaper(
-                path=tmp_path / "old.jpg", filename="old.jpg", size=100, modified_time=1000.0
+                path=tmp_path / "old.jpg",
+                filename="old.jpg",
+                size=100,
+                modified_time=1000.0,
             ),
             LocalWallpaper(
-                path=tmp_path / "new.jpg", filename="new.jpg", size=100, modified_time=3000.0
+                path=tmp_path / "new.jpg",
+                filename="new.jpg",
+                size=100,
+                modified_time=3000.0,
             ),
             LocalWallpaper(
-                path=tmp_path / "mid.jpg", filename="mid.jpg", size=100, modified_time=2000.0
+                path=tmp_path / "mid.jpg",
+                filename="mid.jpg",
+                size=100,
+                modified_time=2000.0,
             ),
         ]
 
@@ -177,15 +196,24 @@ class TestLocalViewModelSorting:
     def test_sort_by_resolution(self, local_view_model, tmp_path):
         """Test sorting wallpapers by resolution (largest first)."""
         wp1 = LocalWallpaper(
-            path=tmp_path / "small.jpg", filename="small.jpg", size=100, modified_time=1.0
+            path=tmp_path / "small.jpg",
+            filename="small.jpg",
+            size=100,
+            modified_time=1.0,
         )
         wp1._resolution = "1920x1080"
         wp2 = LocalWallpaper(
-            path=tmp_path / "large.jpg", filename="large.jpg", size=100, modified_time=2.0
+            path=tmp_path / "large.jpg",
+            filename="large.jpg",
+            size=100,
+            modified_time=2.0,
         )
         wp2._resolution = "3840x2160"
         wp3 = LocalWallpaper(
-            path=tmp_path / "medium.jpg", filename="medium.jpg", size=100, modified_time=3.0
+            path=tmp_path / "medium.jpg",
+            filename="medium.jpg",
+            size=100,
+            modified_time=3.0,
         )
         wp3._resolution = "2560x1440"
 
@@ -203,11 +231,17 @@ class TestLocalViewModelFiltering:
     def test_apply_resolution_filter_all(self, local_view_model, tmp_path):
         """Test resolution filter with 'All' returns everything."""
         wp1 = LocalWallpaper(
-            path=tmp_path / "small.jpg", filename="small.jpg", size=100, modified_time=1.0
+            path=tmp_path / "small.jpg",
+            filename="small.jpg",
+            size=100,
+            modified_time=1.0,
         )
         wp1._resolution = "1280x720"
         wp2 = LocalWallpaper(
-            path=tmp_path / "large.jpg", filename="large.jpg", size=100, modified_time=2.0
+            path=tmp_path / "large.jpg",
+            filename="large.jpg",
+            size=100,
+            modified_time=2.0,
         )
         wp2._resolution = "3840x2160"
 
@@ -218,7 +252,10 @@ class TestLocalViewModelFiltering:
     def test_apply_resolution_filter_minimum(self, local_view_model, tmp_path):
         """Test resolution filter with minimum resolution."""
         wp1 = LocalWallpaper(
-            path=tmp_path / "small.jpg", filename="small.jpg", size=100, modified_time=1.0
+            path=tmp_path / "small.jpg",
+            filename="small.jpg",
+            size=100,
+            modified_time=1.0,
         )
         wp1._resolution = "1280x720"
         wp2 = LocalWallpaper(
@@ -246,15 +283,23 @@ class TestLocalViewModelFiltering:
         )
         wp1._resolution = "1920x1080"
         wp2 = LocalWallpaper(
-            path=tmp_path / "square.jpg", filename="square.jpg", size=100, modified_time=2.0
+            path=tmp_path / "square.jpg",
+            filename="square.jpg",
+            size=100,
+            modified_time=2.0,
         )
         wp2._resolution = "1000x1000"
         wp3 = LocalWallpaper(
-            path=tmp_path / "ultrawide.jpg", filename="ultrawide.jpg", size=100, modified_time=3.0
+            path=tmp_path / "ultrawide.jpg",
+            filename="ultrawide.jpg",
+            size=100,
+            modified_time=3.0,
         )
         wp3._resolution = "2560x1080"
 
-        result = local_view_model._apply_aspect_filter([wp1, wp2, wp3], {"ratios": "16x9"})
+        result = local_view_model._apply_aspect_filter(
+            [wp1, wp2, wp3], {"ratios": "16x9"}
+        )
 
         filenames = [w.filename for w in result]
         assert "wide.jpg" in filenames
@@ -268,7 +313,10 @@ class TestLocalViewModelFiltering:
         )
         wp1._resolution = "1920x1080"
         wp2 = LocalWallpaper(
-            path=tmp_path / "square.jpg", filename="square.jpg", size=100, modified_time=2.0
+            path=tmp_path / "square.jpg",
+            filename="square.jpg",
+            size=100,
+            modified_time=2.0,
         )
         wp2._resolution = "1000x1000"
 
@@ -285,7 +333,10 @@ class TestLocalViewModelFiltering:
         )
         wp1._resolution = "1920x1080"
         wp2 = LocalWallpaper(
-            path=tmp_path / "square.jpg", filename="square.jpg", size=100, modified_time=2.0
+            path=tmp_path / "square.jpg",
+            filename="square.jpg",
+            size=100,
+            modified_time=2.0,
         )
         wp2._resolution = "1000x1000"
 

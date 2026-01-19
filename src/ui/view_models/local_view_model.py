@@ -48,6 +48,7 @@ class LocalViewModel(BaseViewModel):
         self.config_service = config_service
         self._wallpapers: list[LocalWallpaper] = []
         self.search_query = ""
+        self._current_wallpaper_path: str | None = None
 
         # Upscaling queue system
         self._upscale_queue: deque = deque()
@@ -84,6 +85,16 @@ class LocalViewModel(BaseViewModel):
         """Total items being processed (queue + active)"""
         return len(self._upscale_queue) + self._active_count
 
+    @GObject.Property(type=str)
+    def current_wallpaper_path(self) -> str | None:
+        """Path of currently set wallpaper (resolved from symlink)."""
+        return self._current_wallpaper_path
+
+    def refresh_current_wallpaper(self):
+        """Refresh current wallpaper from symlink."""
+        self._current_wallpaper_path = self.wallpaper_setter.get_current_wallpaper()
+        self.notify("current-wallpaper-path")
+
     def _emit_queue_changed(self):
         """Emit signal when queue status changes."""
         self.notify("upscaling-queue-size")
@@ -103,7 +114,9 @@ class LocalViewModel(BaseViewModel):
             if self.pictures_dir:
                 self.local_service.pictures_dir = self.pictures_dir
 
-            wallpapers = await self.local_service.get_wallpapers_async(recursive=recursive)
+            wallpapers = await self.local_service.get_wallpapers_async(
+                recursive=recursive
+            )
             self.search_query = ""
             GLib.idle_add(self._set_wallpapers, wallpapers)
 
@@ -122,7 +135,9 @@ class LocalViewModel(BaseViewModel):
             if not query or query.strip() == "":
                 await self.load_wallpapers()
             else:
-                results = await self.local_service.search_wallpapers_async(query, self.wallpapers)
+                results = await self.local_service.search_wallpapers_async(
+                    query, self.wallpapers
+                )
                 GLib.idle_add(self._set_wallpapers, results)
 
         except Exception as e:
@@ -135,7 +150,9 @@ class LocalViewModel(BaseViewModel):
         try:
             self.is_busy = True
             self.error_message = None
-            result = await self.wallpaper_setter.set_wallpaper_async(str(wallpaper.path))
+            result = await self.wallpaper_setter.set_wallpaper_async(
+                str(wallpaper.path)
+            )
             if result:
                 return True, "Wallpaper set successfully"
             return False, "Failed to set wallpaper"
@@ -203,7 +220,9 @@ class LocalViewModel(BaseViewModel):
         try:
             self.is_busy = True
 
-            all_wallpapers = await self.local_service.get_wallpapers_async(recursive=True)
+            all_wallpapers = await self.local_service.get_wallpapers_async(
+                recursive=True
+            )
 
             if self.search_query:
                 all_wallpapers = await self.local_service.search_wallpapers_async(
@@ -310,12 +329,16 @@ class LocalViewModel(BaseViewModel):
 
             path_hash = hashlib.sha256(str(wallpaper.path).encode()).hexdigest()[:16]
             wallpaper_id = f"local_{path_hash}"
-            if await asyncio.to_thread(self.favorites_service.is_favorite, wallpaper_id):
+            if await asyncio.to_thread(
+                self.favorites_service.is_favorite, wallpaper_id
+            ):
                 return False, "Already in favorites"
 
             from domain.wallpaper import Resolution, Wallpaper, WallpaperSource
 
-            width, height = await asyncio.to_thread(self._get_image_size, wallpaper.path)
+            width, height = await asyncio.to_thread(
+                self._get_image_size, wallpaper.path
+            )
 
             wallpaper_domain = Wallpaper(
                 id=wallpaper_id,
@@ -327,7 +350,9 @@ class LocalViewModel(BaseViewModel):
                 purity=WallpaperPurity.SFW,
             )
 
-            await asyncio.to_thread(self.favorites_service.add_favorite, wallpaper_domain)
+            await asyncio.to_thread(
+                self.favorites_service.add_favorite, wallpaper_domain
+            )
             return True, f"Added '{wallpaper.filename}' to favorites"
 
         except Exception as e:
@@ -375,7 +400,9 @@ class LocalViewModel(BaseViewModel):
 
     def _process_upscale_queue(self):
         """Process items from the upscaling queue."""
-        while self._upscale_queue and self._active_count < self.MAX_CONCURRENT_UPSCALING:
+        while (
+            self._upscale_queue and self._active_count < self.MAX_CONCURRENT_UPSCALING
+        ):
             wallpaper = self._upscale_queue.popleft()
             self._active_count += 1
             self._emit_queue_changed()
@@ -404,7 +431,8 @@ class LocalViewModel(BaseViewModel):
 
             # Create temp file for upscaled image
             temp_path = (
-                wallpaper.path.parent / f"{wallpaper.path.stem}_upscaled{wallpaper.path.suffix}"
+                wallpaper.path.parent
+                / f"{wallpaper.path.stem}_upscaled{wallpaper.path.suffix}"
             )
 
             try:
@@ -446,7 +474,8 @@ class LocalViewModel(BaseViewModel):
 
                 # Replace original with upscaled version
                 backup_path = (
-                    wallpaper.path.parent / f"{wallpaper.path.stem}_backup{wallpaper.path.suffix}"
+                    wallpaper.path.parent
+                    / f"{wallpaper.path.stem}_backup{wallpaper.path.suffix}"
                 )
 
                 try:
@@ -457,7 +486,9 @@ class LocalViewModel(BaseViewModel):
                         with Image.open(temp_path) as img:
                             width, height = img.size
                             if width < 100 or height < 100:
-                                raise ValueError(f"Invalid dimensions: {width}x{height}")
+                                raise ValueError(
+                                    f"Invalid dimensions: {width}x{height}"
+                                )
                     except Exception as verify_error:
                         if temp_path.exists():
                             temp_path.unlink()
@@ -479,9 +510,7 @@ class LocalViewModel(BaseViewModel):
                     return result
 
                 new_size = wallpaper.path.stat().st_size
-                size_improvement = (
-                    f"({original_size / 1024 / 1024:.1f} MB → {new_size / 1024 / 1024:.1f} MB)"
-                )
+                size_improvement = f"({original_size / 1024 / 1024:.1f} MB → {new_size / 1024 / 1024:.1f} MB)"
                 result = True, f"Upscaled 2x {size_improvement}"
                 self._finish_upscale(wallpaper, *result)
                 return result

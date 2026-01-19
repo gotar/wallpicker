@@ -87,6 +87,7 @@ class ShortcutsDialog(Adw.Dialog):
                 ("Ctrl/Cmd + R", "Refresh current view"),
                 ("Ctrl/Cmd + D", "Delete selected wallpapers"),
                 ("Double-click", "Set wallpaper directly"),
+                ("Home", "Scroll to current wallpaper"),
             ],
         )
         content.append(actions_group)

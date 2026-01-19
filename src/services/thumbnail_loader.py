@@ -50,7 +50,10 @@ class ThumbnailLoader:
         # Use file path hash for cache key
         path = Path(file_path)
         cache_key = f"{path.stat().st_mtime}_{path.stat().st_size}"
-        return _THUMBNAIL_CACHE_DIR / f"local_{hash(file_path) & 0xFFFFFFFF:08x}_{cache_key}.jpg"
+        return (
+            _THUMBNAIL_CACHE_DIR
+            / f"local_{hash(file_path) & 0xFFFFFFFF:08x}_{cache_key}.jpg"
+        )
 
     def _generate_thumbnail(self, file_path: str) -> bytes | None:
         """Generate a thumbnail for a local image file.
@@ -93,7 +96,9 @@ class ThumbnailLoader:
         except ImportError:
             logger.warning("PIL not available, falling back to direct loading")
         except Exception as e:
-            logger.error(f"Failed to generate thumbnail for {file_path}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to generate thumbnail for {file_path}: {e}", exc_info=True
+            )
 
         return None
 
@@ -113,7 +118,9 @@ class ThumbnailLoader:
                 if path_or_url.startswith(("http://", "https://")):
                     if self._thumbnail_cache:
                         logger.debug(f"Loading remote thumbnail: {path_or_url[:60]}...")
-                        thumbnail_path = self._thumbnail_cache.get_or_download_sync(path_or_url)
+                        thumbnail_path = self._thumbnail_cache.get_or_download_sync(
+                            path_or_url
+                        )
                         if thumbnail_path and thumbnail_path.exists():
                             # Read file bytes in worker thread
                             try:
@@ -122,7 +129,9 @@ class ThumbnailLoader:
                                 # Schedule texture creation in main thread
                                 def create_remote_texture():
                                     try:
-                                        texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
+                                        texture = Gdk.Texture.new_from_bytes(
+                                            GLib.Bytes.new(data)
+                                        )
                                         callback(texture)
                                     except Exception:
                                         callback(None)
@@ -145,7 +154,9 @@ class ThumbnailLoader:
 
                             def create_cached_texture():
                                 try:
-                                    texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
+                                    texture = Gdk.Texture.new_from_bytes(
+                                        GLib.Bytes.new(data)
+                                    )
                                     callback(texture)
                                 except Exception:
                                     callback(None)
@@ -163,7 +174,9 @@ class ThumbnailLoader:
                         # Create texture in main thread
                         def create_local_texture():
                             try:
-                                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(thumbnail_data))
+                                texture = Gdk.Texture.new_from_bytes(
+                                    GLib.Bytes.new(thumbnail_data)
+                                )
                                 callback(texture)
                             except Exception:
                                 callback(None)
@@ -172,7 +185,9 @@ class ThumbnailLoader:
                         return
 
             except (OSError, Exception) as e:
-                logger.error(f"Failed to load thumbnail from {path_or_url}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to load thumbnail from {path_or_url}: {e}", exc_info=True
+                )
 
             # Invoke callback with None if loading failed
             GLib.idle_add(lambda: callback(None))

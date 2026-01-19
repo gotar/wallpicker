@@ -9,7 +9,9 @@ from core.asyncio_integration import get_event_loop
 class WallpaperSetter:
     def __init__(self):
         self.cache_dir = Path.home() / ".cache" / "wallpaper"
-        self.symlink_path = Path.home() / ".config" / "omarchy" / "current" / "background"
+        self.symlink_path = (
+            Path.home() / ".config" / "omarchy" / "current" / "background"
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symlink_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -17,7 +19,9 @@ class WallpaperSetter:
         """Set wallpaper synchronously, using the global event loop."""
         try:
             loop = get_event_loop()
-            future = asyncio.run_coroutine_threadsafe(self.set_wallpaper_async(image_path), loop)
+            future = asyncio.run_coroutine_threadsafe(
+                self.set_wallpaper_async(image_path), loop
+            )
             # Use timeout to avoid blocking forever
             return future.result(timeout=30)
         except RuntimeError:

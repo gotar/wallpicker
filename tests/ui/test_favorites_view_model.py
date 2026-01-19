@@ -1,11 +1,11 @@
 """Tests for FavoritesViewModel."""
 
-import pytest
 from datetime import datetime
-from unittest.mock import patch
+
+import pytest
 
 from domain.favorite import Favorite
-from domain.wallpaper import Wallpaper, WallpaperPurity, WallpaperSource, Resolution
+from domain.wallpaper import Resolution, Wallpaper, WallpaperPurity, WallpaperSource
 
 
 @pytest.fixture

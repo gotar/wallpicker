@@ -64,7 +64,9 @@ class LocalWallpaperService:
     def get_wallpapers(self, recursive: bool = True) -> list[LocalWallpaper]:
         return self._get_wallpapers_sync(recursive=recursive)
 
-    async def get_wallpapers_async(self, recursive: bool = True) -> list[LocalWallpaper]:
+    async def get_wallpapers_async(
+        self, recursive: bool = True
+    ) -> list[LocalWallpaper]:
         return await asyncio.to_thread(self._get_wallpapers_sync, recursive)
 
     def _get_wallpapers_sync(self, recursive: bool = True) -> list[LocalWallpaper]:
@@ -86,7 +88,10 @@ class LocalWallpaperService:
                 pattern = "*"
 
             for file_path in self.pictures_dir.glob(pattern):
-                if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
+                if (
+                    file_path.is_file()
+                    and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
+                ):
                     stat = file_path.stat()
 
                     # Defer resolution reading - too expensive at scan time

@@ -15,7 +15,6 @@ from core.asyncio_integration import get_event_loop, schedule_async
 from domain.favorite import Favorite
 from domain.wallpaper import (
     Wallpaper,  # noqa: E402
-    WallpaperPurity,
 )
 from services.config_service import ConfigService
 from services.favorites_service import FavoritesService
@@ -103,7 +102,9 @@ class FavoritesViewModel(BaseViewModel):
             if not query or query.strip() == "":
                 await self.load_favorites()
             else:
-                results = await asyncio.to_thread(self.favorites_service.search_favorites, query)
+                results = await asyncio.to_thread(
+                    self.favorites_service.search_favorites, query
+                )
                 GLib.idle_add(self._set_favorites, results)
 
         except Exception as e:
@@ -130,7 +131,9 @@ class FavoritesViewModel(BaseViewModel):
             return future.result(timeout=30)
         except RuntimeError:
             # Event loop not set up, run synchronously (last resort)
-            return asyncio.run(self.add_favorite(wallpaper_id, full_url, path, source, tags))
+            return asyncio.run(
+                self.add_favorite(wallpaper_id, full_url, path, source, tags)
+            )
         except Exception as e:
             logger.error(f"Failed to add favorite synchronously: {e}")
             return False
@@ -140,7 +143,9 @@ class FavoritesViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            await asyncio.to_thread(self.favorites_service.remove_favorite, wallpaper_id)
+            await asyncio.to_thread(
+                self.favorites_service.remove_favorite, wallpaper_id
+            )
             schedule_async(self.load_favorites())
             self._show_toast("Removed from favorites", "success")
 
@@ -158,7 +163,9 @@ class FavoritesViewModel(BaseViewModel):
             self.is_busy = True
             self.error_message = None
 
-            result = await self.wallpaper_setter.set_wallpaper_async(favorite.wallpaper.path)
+            result = await self.wallpaper_setter.set_wallpaper_async(
+                favorite.wallpaper.path
+            )
 
             if result:
                 self.emit("wallpaper-set", favorite.wallpaper.id)
@@ -197,11 +204,17 @@ class FavoritesViewModel(BaseViewModel):
                         return False, "Configuration not available"
 
                     filename = f"{wallpaper.id}.{path.rsplit('.', 1)[-1]}"
-                    dest_path = (config.local_wallpapers_dir or Path.home() / "Pictures") / filename
+                    dest_path = (
+                        config.local_wallpapers_dir or Path.home() / "Pictures"
+                    ) / filename
 
                     if not dest_path.exists():
-                        logger.info(f"Downloading wallpaper {wallpaper.id} to {dest_path}")
-                        success = await self.wallhaven_service.download(wallpaper, dest_path)
+                        logger.info(
+                            f"Downloading wallpaper {wallpaper.id} to {dest_path}"
+                        )
+                        success = await self.wallhaven_service.download(
+                            wallpaper, dest_path
+                        )
                         if not success:
                             return False, "Failed to download wallpaper"
                     else:

@@ -33,9 +33,10 @@
     box-shadow: 0 0 0 4px alpha(@accent_bg_color, 0.2);
 }
 
-.wallpaper-card.current {
+.wallpaper-card.current-wallpaper {
     border: 2px solid @success_bg_color;
     background-color: alpha(@success_bg_color, 0.08);
+    box-shadow: 0 0 0 4px alpha(@success_bg_color, 0.2);
 }
 
 /* Flash animation for wallpaper refresh */
