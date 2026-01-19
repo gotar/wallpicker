@@ -154,6 +154,7 @@ class LocalViewModel(BaseViewModel):
                 str(wallpaper.path)
             )
             if result:
+                self._current_wallpaper_path = str(wallpaper.path)
                 return True, "Wallpaper set successfully"
             return False, "Failed to set wallpaper"
         except Exception as e:
