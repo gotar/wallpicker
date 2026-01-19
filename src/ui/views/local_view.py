@@ -460,15 +460,16 @@ class LocalView(Adw.BreakpointBin):
 
     def _scroll_to_card(self, card):
         """Scroll the scrolled window to make the given card visible."""
-        # Get the adjustment values
         vadj = self.scroll.get_vadjustment()
 
-        # Get card's allocation
-        allocation = card.get_allocation()
-        card_y = allocation.y
-        card_height = allocation.height
+        # Use translate_coordinates to get card position relative to scroll window
+        success, card_x, card_y = card.translate_coordinates(self.scroll, 0, 0)
+        if not success:
+            # Fallback: try to get allocation
+            allocation = card.get_allocation()
+            card_y = allocation.y
 
-        # Get scroll window dimensions
+        card_height = card.get_allocated_height()
         scroll_height = vadj.get_page_size()
         scroll_upper = vadj.get_upper()
 
@@ -478,7 +479,7 @@ class LocalView(Adw.BreakpointBin):
         # Clamp to valid range
         new_y = max(0, min(new_y, scroll_upper - scroll_height))
 
-        # Animate the scroll
+        # Set the scroll position
         vadj.set_value(new_y)
 
     def _on_set_all_selected(self):
