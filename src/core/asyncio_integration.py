@@ -9,7 +9,11 @@ import threading
 from collections.abc import Coroutine
 from typing import Any
 
-# Global event loop reference
+try:
+    from gi.repository import GLib
+except ImportError:
+    GLib = None
+
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_thread: threading.Thread | None = None
 
@@ -21,22 +25,17 @@ def setup_event_loop() -> asyncio.AbstractEventLoop:
         The configured event loop ready for use with GTK.
 
     This should be called once at application startup, typically in launcher.py.
-    The event loop is configured to run continuously in a background thread
-    alongside GTK's main loop.
+    Uses a background thread to run the asyncio event loop.
     """
     global _loop, _loop_thread
 
-    # Create and set the event loop
-    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
     _loop = asyncio.new_event_loop()
 
-    # Start the event loop in a separate thread
     def run_loop():
-        """Run the event loop in a background thread."""
         asyncio.set_event_loop(_loop)
         _loop.run_forever()
 
-    _loop_thread = threading.Thread(target=run_loop, daemon=True, name="AsyncioLoop")
+    _loop_thread = threading.Thread(target=run_loop, daemon=True)
     _loop_thread.start()
 
     return _loop
@@ -60,8 +59,7 @@ def get_event_loop() -> asyncio.AbstractEventLoop:
 def schedule_async(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
     """Schedule a coroutine to run on the asyncio event loop from GTK callbacks.
 
-    This is the proper way to call async methods from GTK signal handlers.
-    Use this function instead of asyncio.create_task() in GTK callbacks.
+    This properly integrates Python's asyncio with GTK4's GLib main loop.
 
     Example:
         # In a GTK signal handler:
@@ -72,16 +70,9 @@ def schedule_async(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
 
     Returns:
         An asyncio.Task that can be awaited if needed.
-
-    Raises:
-        RuntimeError: If the event loop is not properly configured.
     """
     loop = get_event_loop()
-    task = asyncio.run_coroutine_threadsafe(coro, loop)
-
-    # Return the task (wrapped as a Future from run_coroutine_threadsafe)
-    # For most UI use cases, you don't need to await this
-    return task
+    return asyncio.run_coroutine_threadsafe(coro, loop)
 
 
 def create_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
@@ -97,4 +88,4 @@ def create_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
         An asyncio.Task.
     """
     loop = get_event_loop()
-    return loop.create_task(coro)
+    return asyncio.run_coroutine_threadsafe(coro, loop)

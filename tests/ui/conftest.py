@@ -11,12 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 
 @pytest.fixture
-def mock_local_service(tmp_path):
+def mock_local_service(tmp_path, mocker):
     """Mock LocalWallpaperService for ViewModel tests."""
     from services.local_service import LocalWallpaper, LocalWallpaperService
-
-    mock = MagicMock(spec=LocalWallpaperService)
-    mock.pictures_dir = tmp_path
 
     # Create some mock wallpapers
     wallpapers = [
@@ -25,10 +22,16 @@ def mock_local_service(tmp_path):
             filename=f"wallpaper_{i}.jpg",
             size=1000 * i,
             modified_time=1000000.0 + i,
+            tags=[],  # Pre-set tags to avoid lazy loading in tests
         )
         for i in range(3)
     ]
 
+    # Create mock instance
+    mock = MagicMock()
+    mock.pictures_dir = tmp_path
+
+    # Set up async method
     mock.get_wallpapers_async = AsyncMock(return_value=wallpapers)
     mock.search_wallpapers_async = AsyncMock(return_value=wallpapers[:1])
     mock.delete_wallpaper_async = AsyncMock(return_value=True)
@@ -138,14 +141,18 @@ def mock_thumbnail_cache():
 
 
 @pytest.fixture
-def local_view_model(mock_local_service, mock_wallpaper_setter, tmp_path):
+def local_view_model(mock_local_service, mock_wallpaper_setter, tmp_path, mocker):
     """Create LocalViewModel with mocked services."""
     from ui.view_models.local_view_model import LocalViewModel
+
+    # Mock TagStorageService at the module level to avoid import issues
+    mocker.patch("services.tag_storage.TagStorageService")
 
     return LocalViewModel(
         local_service=mock_local_service,
         wallpaper_setter=mock_wallpaper_setter,
         pictures_dir=tmp_path,
+        toast_service=None,
     )
 
 

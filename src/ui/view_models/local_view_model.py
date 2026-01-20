@@ -20,6 +20,8 @@ from services.local_service import LocalWallpaper, LocalWallpaperService  # noqa
 from services.wallpaper_setter import WallpaperSetter  # noqa: E402
 from ui.view_models.base import BaseViewModel  # noqa: E402
 
+HASH_CHUNK_SIZE = 65536
+
 
 class LocalViewModel(BaseViewModel):
     """ViewModel for local wallpaper browsing"""
@@ -27,10 +29,14 @@ class LocalViewModel(BaseViewModel):
     __gsignals__ = {
         "upscaling-complete": (GObject.SignalFlags.RUN_FIRST, None, (bool, str, str)),
         "upscaling-queue-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
+        "tagging-complete": (GObject.SignalFlags.RUN_FIRST, None, (bool, str, str)),
+        "tagging-queue-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
     }
 
     # Max concurrent upscaling operations
     MAX_CONCURRENT_UPSCALING = 2
+    # Max concurrent tagging operations
+    MAX_CONCURRENT_TAGGING = 2
 
     def __init__(
         self,
@@ -39,6 +45,7 @@ class LocalViewModel(BaseViewModel):
         pictures_dir: Path | None = None,
         favorites_service: FavoritesService | None = None,
         config_service=None,
+        toast_service=None,
     ) -> None:
         super().__init__()
         self.local_service = local_service
@@ -46,15 +53,35 @@ class LocalViewModel(BaseViewModel):
         self.pictures_dir = pictures_dir
         self.favorites_service = favorites_service
         self.config_service = config_service
+        self.toast_service = toast_service
         self._wallpapers: list[LocalWallpaper] = []
         self.search_query = ""
-        self._current_wallpaper_path: str | None = None
+        self._current_wallpaper_path: str | None = self._load_last_wallpaper_path()
 
         # Upscaling queue system
         self._upscale_queue: deque = deque()
         self._active_count = 0
         self._completed_count = 0
         self._failed_count = 0
+
+        # Tagging queue system
+        self._tag_queue: deque = deque()
+
+    def _load_last_wallpaper_path(self) -> str | None:
+        """Load last set wallpaper path from config."""
+        if self.config_service:
+            config = self.config_service.get_config()
+            if config and config.last_set_wallpaper_path:
+                return config.last_set_wallpaper_path
+        return None
+
+    def _save_last_wallpaper_path(self, path: str) -> None:
+        """Save last set wallpaper path to config."""
+        if self.config_service:
+            config = self.config_service.get_config()
+            if config:
+                config.last_set_wallpaper_path = path
+                self.config_service.save_config(config)
 
     @GObject.Property(type=object)
     def wallpapers(self) -> list[LocalWallpaper]:
@@ -85,6 +112,16 @@ class LocalViewModel(BaseViewModel):
         """Total items being processed (queue + active)"""
         return len(self._upscale_queue) + self._active_count
 
+    @GObject.Property(type=int)
+    def tagging_queue_size(self) -> int:
+        """Number of items waiting in tagging queue"""
+        return len(self._tag_queue)
+
+    @GObject.Property(type=int)
+    def tagging_active_count(self) -> int:
+        """Number of currently active tagging operations"""
+        return self._active_count
+
     @GObject.Property(type=str)
     def current_wallpaper_path(self) -> str | None:
         """Path of currently set wallpaper (resolved from symlink)."""
@@ -94,6 +131,29 @@ class LocalViewModel(BaseViewModel):
         """Refresh current wallpaper from symlink."""
         self._current_wallpaper_path = self.wallpaper_setter.get_current_wallpaper()
         self.notify("current-wallpaper-path")
+
+    def find_wallpaper_by_hash(self, target_path: str) -> str | None:
+        """Find local wallpaper matching the content hash of target file."""
+        target_hash = self._compute_file_hash(target_path)
+        if not target_hash:
+            return None
+
+        for wp in self._wallpapers:
+            wp_hash = self._compute_file_hash(str(wp.path))
+            if wp_hash == target_hash:
+                return str(wp.path)
+        return None
+
+    def _compute_file_hash(self, path: str) -> str | None:
+        """Compute MD5 hash of file content."""
+        try:
+            md5 = hashlib.md5()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(HASH_CHUNK_SIZE), b""):
+                    md5.update(chunk)
+            return md5.hexdigest()
+        except OSError:
+            return None
 
     def _emit_queue_changed(self):
         """Emit signal when queue status changes."""
@@ -106,6 +166,16 @@ class LocalViewModel(BaseViewModel):
             self._active_count,
         )
 
+    def _emit_tagging_queue_changed(self):
+        """Emit signal when tagging queue status changes."""
+        self.notify("tagging-queue-size")
+        self.notify("tagging-active-count")
+        self.emit(
+            "tagging-queue-changed",
+            len(self._tag_queue),
+            self._active_count,
+        )
+
     async def load_wallpapers(self, recursive: bool = True) -> None:
         try:
             self.is_busy = True
@@ -114,17 +184,41 @@ class LocalViewModel(BaseViewModel):
             if self.pictures_dir:
                 self.local_service.pictures_dir = self.pictures_dir
 
-            wallpapers = await self.local_service.get_wallpapers_async(
-                recursive=recursive
-            )
+            wallpapers = await self.local_service.get_wallpapers_async(recursive=recursive)
             self.search_query = ""
-            GLib.idle_add(self._set_wallpapers, wallpapers)
+            self._set_wallpapers(wallpapers)
+
+            # Auto-generate tags for wallpapers that don't have them
+            schedule_async(self._queue_missing_tags_async())
 
         except Exception as e:
             self.error_message = f"Failed to load wallpapers: {e}"
-            GLib.idle_add(self._set_wallpapers, [])
+            self._set_wallpapers([])
         finally:
             self.is_busy = False
+
+    async def _queue_missing_tags_async(self):
+        """Queue tag generation for all wallpapers missing tags."""
+        import os
+
+        if os.environ.get("WALLPICKER_TEST"):
+            return
+
+        try:
+            from services.tag_storage import TagStorageService
+
+            storage = TagStorageService()
+            untagged_count = 0
+
+            for wp in self._wallpapers:
+                if not storage.has_tags(wp.path):
+                    self.queue_generate_tags(wp)
+                    untagged_count += 1
+
+            if untagged_count > 0 and self.toast_service:
+                self.toast_service.show_info(f"Generating tags for {untagged_count} wallpapers...")
+        except Exception:
+            pass  # Silently fail - tags are non-critical
 
     async def search_wallpapers(self, query: str = "") -> None:
         try:
@@ -135,9 +229,7 @@ class LocalViewModel(BaseViewModel):
             if not query or query.strip() == "":
                 await self.load_wallpapers()
             else:
-                results = await self.local_service.search_wallpapers_async(
-                    query, self.wallpapers
-                )
+                results = await self.local_service.search_wallpapers_async(query, self.wallpapers)
                 GLib.idle_add(self._set_wallpapers, results)
 
         except Exception as e:
@@ -150,11 +242,11 @@ class LocalViewModel(BaseViewModel):
         try:
             self.is_busy = True
             self.error_message = None
-            result = await self.wallpaper_setter.set_wallpaper_async(
-                str(wallpaper.path)
-            )
+            result = await self.wallpaper_setter.set_wallpaper_async(str(wallpaper.path))
             if result:
                 self._current_wallpaper_path = str(wallpaper.path)
+                self._save_last_wallpaper_path(str(wallpaper.path))
+                self.notify("current-wallpaper-path")
                 return True, "Wallpaper set successfully"
             return False, "Failed to set wallpaper"
         except Exception as e:
@@ -221,9 +313,7 @@ class LocalViewModel(BaseViewModel):
         try:
             self.is_busy = True
 
-            all_wallpapers = await self.local_service.get_wallpapers_async(
-                recursive=True
-            )
+            all_wallpapers = await self.local_service.get_wallpapers_async(recursive=True)
 
             if self.search_query:
                 all_wallpapers = await self.local_service.search_wallpapers_async(
@@ -330,16 +420,12 @@ class LocalViewModel(BaseViewModel):
 
             path_hash = hashlib.sha256(str(wallpaper.path).encode()).hexdigest()[:16]
             wallpaper_id = f"local_{path_hash}"
-            if await asyncio.to_thread(
-                self.favorites_service.is_favorite, wallpaper_id
-            ):
+            if await asyncio.to_thread(self.favorites_service.is_favorite, wallpaper_id):
                 return False, "Already in favorites"
 
             from domain.wallpaper import Resolution, Wallpaper, WallpaperSource
 
-            width, height = await asyncio.to_thread(
-                self._get_image_size, wallpaper.path
-            )
+            width, height = await asyncio.to_thread(self._get_image_size, wallpaper.path)
 
             wallpaper_domain = Wallpaper(
                 id=wallpaper_id,
@@ -351,9 +437,7 @@ class LocalViewModel(BaseViewModel):
                 purity=WallpaperPurity.SFW,
             )
 
-            await asyncio.to_thread(
-                self.favorites_service.add_favorite, wallpaper_domain
-            )
+            await asyncio.to_thread(self.favorites_service.add_favorite, wallpaper_domain)
             return True, f"Added '{wallpaper.filename}' to favorites"
 
         except Exception as e:
@@ -401,9 +485,7 @@ class LocalViewModel(BaseViewModel):
 
     def _process_upscale_queue(self):
         """Process items from the upscaling queue."""
-        while (
-            self._upscale_queue and self._active_count < self.MAX_CONCURRENT_UPSCALING
-        ):
+        while self._upscale_queue and self._active_count < self.MAX_CONCURRENT_UPSCALING:
             wallpaper = self._upscale_queue.popleft()
             self._active_count += 1
             self._emit_queue_changed()
@@ -432,8 +514,7 @@ class LocalViewModel(BaseViewModel):
 
             # Create temp file for upscaled image
             temp_path = (
-                wallpaper.path.parent
-                / f"{wallpaper.path.stem}_upscaled{wallpaper.path.suffix}"
+                wallpaper.path.parent / f"{wallpaper.path.stem}_upscaled{wallpaper.path.suffix}"
             )
 
             try:
@@ -475,8 +556,7 @@ class LocalViewModel(BaseViewModel):
 
                 # Replace original with upscaled version
                 backup_path = (
-                    wallpaper.path.parent
-                    / f"{wallpaper.path.stem}_backup{wallpaper.path.suffix}"
+                    wallpaper.path.parent / f"{wallpaper.path.stem}_backup{wallpaper.path.suffix}"
                 )
 
                 try:
@@ -487,9 +567,7 @@ class LocalViewModel(BaseViewModel):
                         with Image.open(temp_path) as img:
                             width, height = img.size
                             if width < 100 or height < 100:
-                                raise ValueError(
-                                    f"Invalid dimensions: {width}x{height}"
-                                )
+                                raise ValueError(f"Invalid dimensions: {width}x{height}")
                     except Exception as verify_error:
                         if temp_path.exists():
                             temp_path.unlink()
@@ -511,7 +589,9 @@ class LocalViewModel(BaseViewModel):
                     return result
 
                 new_size = wallpaper.path.stat().st_size
-                size_improvement = f"({original_size / 1024 / 1024:.1f} MB → {new_size / 1024 / 1024:.1f} MB)"
+                size_improvement = (
+                    f"({original_size / 1024 / 1024:.1f} MB → {new_size / 1024 / 1024:.1f} MB)"
+                )
                 result = True, f"Upscaled 2x {size_improvement}"
                 self._finish_upscale(wallpaper, *result)
                 return result
@@ -546,3 +626,99 @@ class LocalViewModel(BaseViewModel):
 
         # Process next item in queue
         self._process_upscale_queue()
+
+    def queue_generate_tags(self, wallpaper: LocalWallpaper) -> tuple[bool, str]:
+        """Queue a wallpaper for tag generation.
+
+        Args:
+            wallpaper: The wallpaper to generate tags for
+
+        Returns:
+            Tuple of (queued, message)
+        """
+        self._tag_queue.append(wallpaper)
+
+        queue_size = len(self._tag_queue)
+
+        self._emit_tagging_queue_changed()
+
+        self._process_tag_queue()
+
+        if queue_size == 1:
+            return True, "Generating tags..."
+        else:
+            return True, f"Added to tag queue ({queue_size - self._active_count} waiting)"
+
+    def _process_tag_queue(self):
+        """Process items from the tagging queue."""
+        while self._tag_queue and self._active_count < self.MAX_CONCURRENT_TAGGING:
+            wallpaper = self._tag_queue.popleft()
+            self._active_count += 1
+            self._emit_tagging_queue_changed()
+
+            schedule_async(self._run_tag_async(wallpaper))
+
+    async def _run_tag_async(self, wallpaper: LocalWallpaper) -> tuple[bool, str]:
+        """Run the actual tag generation process asynchronously.
+
+        Args:
+            wallpaper: The wallpaper to generate tags for
+
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            from services.tag_generation import TagGenerationService
+            from services.tag_storage import TagStorageService
+
+            generator = TagGenerationService()
+
+            if not generator.is_available():
+                result = False, "No tag generator available. Install clip-anytorch."
+                self._finish_tag(wallpaper, *result)
+                return result
+
+            tags, confidence = await generator.generate_tags_async(wallpaper.path)
+
+            if tags:
+                storage = TagStorageService()
+                storage.save_tags(wallpaper.path, tags, confidence)
+
+                wallpaper.tags = tags
+
+                result = True, f"Generated {len(tags)} tags"
+            else:
+                result = False, "No tags generated"
+
+            self._finish_tag(wallpaper, *result)
+            return result
+
+        except Exception as e:
+            result = False, str(e)
+            self._finish_tag(wallpaper, *result)
+            return result
+
+    def _finish_tag(self, wallpaper: LocalWallpaper, success: bool, message: str):
+        """Handle completion of a tagging operation."""
+        self._active_count -= 1
+
+        self._emit_tagging_queue_changed()
+        self.emit("tagging-complete", success, message, str(wallpaper.path))
+
+        self._process_tag_queue()
+
+    async def generate_tags_for_all_async(self) -> None:
+        """Generate tags for all wallpapers without tags."""
+        from services.tag_storage import TagStorageService
+
+        storage = TagStorageService()
+        untagged = storage.get_untagged_images([wp.path for wp in self._wallpapers])
+
+        if not untagged:
+            return
+
+        for path in untagged:
+            for wp in self._wallpapers:
+                if wp.path == path:
+                    self.queue_generate_tags(wp)
+                    break

@@ -56,6 +56,7 @@ class Wallpaper:
     file_size: int = 0
     thumbs_large: str = ""
     thumbs_small: str = ""
+    tags: list[str] = field(default_factory=list)
 
     # Domain behavior
     @property
@@ -80,6 +81,7 @@ class Wallpaper:
             query_lower in self.id.lower()
             or query_lower in self.category.lower()
             or query_lower in self.url.lower()
+            or any(query_lower in tag.lower() for tag in self.tags)
         )
 
     def to_dict(self) -> dict:
@@ -96,6 +98,7 @@ class Wallpaper:
             "file_size": self.file_size,
             "thumbs_large": self.thumbs_large,
             "thumbs_small": self.thumbs_small,
+            "tags": self.tags,
         }
 
     @classmethod
@@ -119,4 +122,5 @@ class Wallpaper:
             file_size=data.get("file_size", 0),
             thumbs_large=data.get("thumbs_large", ""),
             thumbs_small=data.get("thumbs_small", ""),
+            tags=data.get("tags", []),
         )

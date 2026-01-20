@@ -13,13 +13,13 @@ def local_view_model(mocker, tmp_path):
     mock_service = mocker.MagicMock()
     mock_setter = mocker.MagicMock()
 
-    # Configure async method mocks
     wallpapers = [
         LocalWallpaper(
             path=tmp_path / f"wallpaper_{i}.jpg",
             filename=f"wallpaper_{i}.jpg",
             size=1000 * i,
             modified_time=1000000.0 + i,
+            tags=[],
         )
         for i in range(3)
     ]
@@ -27,13 +27,16 @@ def local_view_model(mocker, tmp_path):
     mock_service.search_wallpapers_async = mocker.AsyncMock(return_value=wallpapers[:1])
     mock_service.delete_wallpaper_async = mocker.AsyncMock(return_value=True)
 
-    # Mock GLib.idle_add to execute callback immediately
     mocker.patch(
         "ui.view_models.local_view_model.GLib.idle_add",
         side_effect=lambda func, *args: func(*args),
     )
 
-    return LocalViewModel(local_service=mock_service, wallpaper_setter=mock_setter)
+    return LocalViewModel(
+        local_service=mock_service,
+        wallpaper_setter=mock_setter,
+        toast_service=None,
+    )
 
 
 class TestLocalViewModelInit:
@@ -297,9 +300,7 @@ class TestLocalViewModelFiltering:
         )
         wp3._resolution = "2560x1080"
 
-        result = local_view_model._apply_aspect_filter(
-            [wp1, wp2, wp3], {"ratios": "16x9"}
-        )
+        result = local_view_model._apply_aspect_filter([wp1, wp2, wp3], {"ratios": "16x9"})
 
         filenames = [w.filename for w in result]
         assert "wide.jpg" in filenames

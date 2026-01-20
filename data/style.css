@@ -139,6 +139,19 @@
     line-height: 1.4;
 }
 
+.wallpaper-card .tags-label {
+    font-size: 0.6875rem;
+    font-weight: 400;
+    color: @accent_color;
+    min-height: 1rem;
+    line-height: 1.3;
+    margin-top: 2px;
+}
+
+.wallpaper-card .tags-label:hover {
+    color: shade(@accent_color, 1.2);
+}
+
 .wallpaper-card .caption {
     font-size: 0.75rem;
     font-weight: 400;

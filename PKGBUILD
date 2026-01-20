@@ -19,7 +19,8 @@ depends=(
 )
 makedepends=('python-setuptools' 'python-wheel' 'python-build' 'python-installer')
 optdepends=('awww: Animated wallpaper transitions'
-            'waifu2x-ncnn-vulkan: AI upscaling for local wallpapers')
+            'waifu2x-ncnn-vulkan: AI upscaling for local wallpapers'
+            'clip-anytorch: AI image tagging for local wallpapers')
 source=("${pkgname}::git+https://github.com/gotar/WallPicker.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 

@@ -16,6 +16,7 @@ class ConfigService(BaseService):
         "wallhaven_api_key": None,
         "notifications_enabled": True,
         "upscaler_enabled": False,
+        "tagger_enabled": False,
     }
 
     def __init__(self, config_file: Path | None = None) -> None:
@@ -25,9 +26,7 @@ class ConfigService(BaseService):
             config_file: Path to config file (defaults to ~/.config/wallpicker/config.json)
         """
         super().__init__()
-        self.config_file = (
-            config_file or Path.home() / ".config" / "wallpicker" / "config.json"
-        )
+        self.config_file = config_file or Path.home() / ".config" / "wallpicker" / "config.json"
         self.config_dir = self.config_file.parent
         self._config: Config | None = None
 
@@ -63,9 +62,7 @@ class ConfigService(BaseService):
                 self.log_debug("Using default config")
             return self._config
         except (json.JSONDecodeError, OSError) as e:
-            self.log_error(
-                f"Failed to load config from {self.config_file}: {e}", exc_info=True
-            )
+            self.log_error(f"Failed to load config from {self.config_file}: {e}", exc_info=True)
             raise ServiceError(f"Failed to load configuration: {e}") from e
 
     def save_config(self, config: Config) -> None:
@@ -88,9 +85,7 @@ class ConfigService(BaseService):
             self._config = config
             self.log_info(f"Saved config to {self.config_file}")
         except (ConfigError, OSError) as e:
-            self.log_error(
-                f"Failed to save config to {self.config_file}: {e}", exc_info=True
-            )
+            self.log_error(f"Failed to save config to {self.config_file}: {e}", exc_info=True)
             raise ServiceError(f"Failed to save configuration: {e}") from e
 
     def get_config(self) -> Config | None:

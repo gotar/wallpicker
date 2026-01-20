@@ -11,6 +11,7 @@ class WallpaperSetter:
     def __init__(self):
         self.cache_dir = Path.home() / ".cache" / "wallpaper"
         self.symlink_path = Path.home() / ".config" / "omarchy" / "current" / "background"
+        self.original_path_file = Path.home() / ".cache" / "wallpaper" / "original_path"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.symlink_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -37,6 +38,7 @@ class WallpaperSetter:
         try:
             await self._ensure_daemon_running()
             self._update_symlink(path)
+            self._save_original_path(path)
             await self._apply_wallpaper(path)
             await asyncio.to_thread(self._cleanup_old_wallpapers)
             return True
@@ -71,6 +73,12 @@ class WallpaperSetter:
             self.symlink_path.unlink()
 
         self.symlink_path.symlink_to(path)
+
+    def _save_original_path(self, path: Path):
+        try:
+            self.original_path_file.write_text(str(path))
+        except OSError:
+            pass
 
     async def _apply_wallpaper(self, path: Path):
         process = await asyncio.create_subprocess_exec(
@@ -109,6 +117,15 @@ class WallpaperSetter:
             old.unlink(missing_ok=True)
 
     def get_current_wallpaper(self) -> str | None:
+        # First try reading original path file (set by random_wallpaper.sh)
+        if self.original_path_file.exists():
+            try:
+                original_path = self.original_path_file.read_text().strip()
+                if original_path and Path(original_path).exists():
+                    return original_path
+            except OSError:
+                pass
+
         if self.symlink_path.is_symlink():
             try:
                 # Read the immediate target of the symlink without resolving recursively

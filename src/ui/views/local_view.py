@@ -19,8 +19,8 @@ from ui.view_models.local_view_model import LocalViewModel  # noqa: E402
 # Pagination settings for lazy loading
 INITIAL_PAGE_SIZE = 50
 PAGE_SIZE = 50
-LOAD_MORE_THRESHOLD = 200
-MAX_VISIBLE_ITEMS = 300
+LOAD_MORE_THRESHOLD = 300
+MAX_VISIBLE_ITEMS = 1000
 
 
 class LocalView(Adw.BreakpointBin):
@@ -49,7 +49,9 @@ class LocalView(Adw.BreakpointBin):
         self._wallpaper_card_map = {}  # Reverse mapping: wallpaper -> card
         self._path_card_map = {}  # Mapping by path string: path -> card
         self._upscale_overlays = {}
+        self._tag_overlays = {}
         self._metadata_labels = {}
+        self._tags_labels = {}
         self._needs_full_rebuild = False
 
         # Pagination state
@@ -65,7 +67,13 @@ class LocalView(Adw.BreakpointBin):
         self._setup_keyboard_shortcuts()
         self._bind_to_view_model()
         self._bind_upscale_signal()
+        self._bind_tagging_signal()
         self._setup_scroll_detection()
+
+    def _bind_tagging_signal(self):
+        """Connect to tagging signals."""
+        self.view_model.connect("tagging-complete", self._on_tagging_complete)
+        self.view_model.connect("tagging-queue-changed", self._on_tagging_queue_changed)
 
     def _bind_upscale_signal(self):
         """Connect to upscaling signals."""
@@ -165,9 +173,7 @@ class LocalView(Adw.BreakpointBin):
         toolbar_wrapper.add_css_class("toolbar-wrapper")
         self.main_box.append(toolbar_wrapper)
 
-        folder_btn = Gtk.Button(
-            icon_name="folder-symbolic", tooltip_text="Choose folder"
-        )
+        folder_btn = Gtk.Button(icon_name="folder-symbolic", tooltip_text="Choose folder")
         folder_btn.connect("clicked", self._on_folder_clicked)
         toolbar_wrapper.append(folder_btn)
 
@@ -421,42 +427,80 @@ class LocalView(Adw.BreakpointBin):
 
     def scroll_to_current_wallpaper(self):
         """Scroll the scrolled window to show the currently set wallpaper."""
+        # Always refresh from symlink first to catch external changes
+        self.view_model.refresh_current_wallpaper()
+
         current_path = self.view_model.current_wallpaper_path
         if not current_path:
             if self.toast_service:
                 self.toast_service.show_info("No current wallpaper set")
             return
 
-        card = self._path_card_map.get(current_path)
-        if not card:
-            if not self._load_until_path_found(current_path):
-                if self.toast_service:
-                    self.toast_service.show_info("Current wallpaper not in list")
-                return
+        target_path = current_path
+        card = self._path_card_map.get(target_path)
 
-        card = self._path_card_map.get(current_path)
+        if not card:
+            # Try matching by filename first
+            current_filename = Path(current_path).name
+            matched_path = self._find_path_by_filename(current_filename)
+            if matched_path:
+                target_path = matched_path
+                card = self._path_card_map.get(target_path)
+
+        if not card:
+            # Try matching by content hash (handles awww cache copies)
+            matched_path = self.view_model.find_wallpaper_by_hash(current_path)
+            if matched_path:
+                target_path = matched_path
+                card = self._path_card_map.get(target_path)
+
+        if not card:
+            if not self._load_until_path_found(target_path):
+                # Try hash match after loading more
+                matched_path = self.view_model.find_wallpaper_by_hash(current_path)
+                if matched_path:
+                    target_path = matched_path
+
+        card = self._path_card_map.get(target_path)
         if card:
             self._scroll_to_card(card)
+        elif self.toast_service:
+            self.toast_service.show_info("Current wallpaper not in list")
+
+    def _find_path_by_filename(self, filename: str) -> str | None:
+        """Find a wallpaper path by matching filename."""
+        for wp in self._full_wallpapers:
+            if wp.path.name == filename:
+                return str(wp.path)
+        return None
 
     def _load_until_path_found(self, target_path: str) -> bool:
         """Load more items until the target path is in the visible cards.
 
         Returns True if the path was found, False otherwise.
         """
-        # Check if the wallpaper exists in our full list (not filtered view)
-        if not any(str(wp.path) == target_path for wp in self._full_wallpapers):
+        target_filename = Path(target_path).name
+
+        has_match = any(str(wp.path) == target_path for wp in self._full_wallpapers)
+        has_filename_match = any(wp.path.name == target_filename for wp in self._full_wallpapers)
+
+        if not has_match and not has_filename_match:
             return False
 
-        # Load more items until we find it or reach the end
         max_iterations = len(self._full_wallpapers) // PAGE_SIZE + 5
         for _ in range(max_iterations):
             if target_path in self._path_card_map:
+                return True
+            matched = self._find_path_by_filename(target_filename)
+            if matched and matched in self._path_card_map:
                 return True
             if not self._has_more_items:
                 break
             self._load_more_items()
 
-        return target_path in self._path_card_map
+        return target_path in self._path_card_map or bool(
+            self._find_path_by_filename(target_filename)
+        )
 
     def _scroll_to_card(self, card):
         """Scroll the scrolled window to make the given card visible."""
@@ -666,9 +710,25 @@ class LocalView(Adw.BreakpointBin):
         metadata_label.add_css_class("metadata-label")
         info_box.append(metadata_label)
 
-        # Store metadata label reference for refresh
+        # Tags display
+        tags_label = Gtk.Label()
+        tags_label.add_css_class("tags-label")
+        if wallpaper.tags:
+            # Show first 5 tags, truncate if too many
+            display_tags = wallpaper.tags[:5]
+            tags_text = " ".join(f"#{tag}" for tag in display_tags)
+            if len(wallpaper.tags) > 5:
+                tags_text += f" +{len(wallpaper.tags) - 5}"
+            tags_label.set_text(tags_text)
+            tags_label.set_tooltip_text(" • ".join(wallpaper.tags))
+        else:
+            tags_label.set_text("No tags")
+            tags_label.add_css_class("dim-label")
+        info_box.append(tags_label)
+
         path_str = str(wallpaper.path)
         self._metadata_labels[path_str] = metadata_label
+        self._tags_labels[path_str] = tags_label
 
         card.append(info_box)
 
@@ -677,18 +737,14 @@ class LocalView(Adw.BreakpointBin):
         actions_box.add_css_class("card-actions-box")
         actions_box.set_halign(Gtk.Align.CENTER)
 
-        set_btn = Gtk.Button(
-            icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper"
-        )
+        set_btn = Gtk.Button(icon_name="image-x-generic-symbolic", tooltip_text="Set as wallpaper")
         set_btn.add_css_class("action-button")
         set_btn.add_css_class("suggested-action")
         set_btn.set_cursor_from_name("pointer")
         set_btn.connect("clicked", self._on_set_wallpaper, wallpaper)
         actions_box.append(set_btn)
 
-        fav_btn = Gtk.Button(
-            icon_name="starred-symbolic", tooltip_text="Add to favorites"
-        )
+        fav_btn = Gtk.Button(icon_name="starred-symbolic", tooltip_text="Add to favorites")
         fav_btn.add_css_class("action-button")
         fav_btn.add_css_class("favorite-action")
         fav_btn.set_cursor_from_name("pointer")
@@ -704,13 +760,18 @@ class LocalView(Adw.BreakpointBin):
 
         # Show upscale button only if enabled in config
         if self._is_upscaler_enabled():
-            upscale_btn = Gtk.Button(
-                icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)"
-            )
+            upscale_btn = Gtk.Button(icon_name="zoom-in-symbolic", tooltip_text="Upscale 2x (AI)")
             upscale_btn.add_css_class("action-button")
             upscale_btn.set_cursor_from_name("pointer")
             upscale_btn.connect("clicked", self._on_upscale_wallpaper, wallpaper)
             actions_box.append(upscale_btn)
+
+        # Show tag button
+        tag_btn = Gtk.Button(icon_name="tag-symbolic", tooltip_text="Generate AI tags")
+        tag_btn.add_css_class("action-button")
+        tag_btn.set_cursor_from_name("pointer")
+        tag_btn.connect("clicked", self._on_generate_tags, wallpaper)
+        actions_box.append(tag_btn)
 
         card.append(actions_box)
         return card
@@ -788,7 +849,6 @@ class LocalView(Adw.BreakpointBin):
     def _on_upscale_wallpaper(self, button, wallpaper):
         success, message = self.view_model.queue_upscale(wallpaper)
         if success:
-            # Show blocking overlay on the card
             card = self._wallpaper_card_map.get(wallpaper)
             if card:
                 self._show_upscale_overlay(card)
@@ -797,6 +857,93 @@ class LocalView(Adw.BreakpointBin):
         else:
             if self.toast_service:
                 self.toast_service.show_error(message)
+
+    def _on_generate_tags(self, button, wallpaper):
+        success, message = self.view_model.queue_generate_tags(wallpaper)
+        if success:
+            card = self._wallpaper_card_map.get(wallpaper)
+            if card:
+                self._show_tag_overlay(card)
+            if self.toast_service:
+                self.toast_service.show_info(message)
+        else:
+            if self.toast_service:
+                self.toast_service.show_error(message)
+
+    def _show_tag_overlay(self, card):
+        """Show blocking overlay with spinner on the card's image."""
+        if card in self._tag_overlays:
+            return
+
+        image_overlay = None
+        child = card.get_first_child()
+        while child:
+            if isinstance(child, Gtk.Overlay):
+                image_overlay = child
+                break
+            child = child.get_next_sibling()
+
+        if not image_overlay:
+            return
+
+        overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        overlay.add_css_class("upscale-overlay-small")
+        overlay.set_halign(Gtk.Align.CENTER)
+        overlay.set_valign(Gtk.Align.CENTER)
+
+        spinner = Gtk.Spinner(spinning=True)
+        spinner.set_size_request(24, 24)
+        overlay.append(spinner)
+
+        image_overlay.add_overlay(overlay)
+        self._tag_overlays[card] = overlay
+
+    def _hide_tag_overlay(self, card):
+        """Hide blocking overlay from the card."""
+        if card not in self._tag_overlays:
+            return
+
+        overlay = self._tag_overlays.pop(card)
+
+        image_overlay = None
+        child = card.get_first_child()
+        while child:
+            if isinstance(child, Gtk.Overlay):
+                image_overlay = child
+                break
+            child = child.get_next_sibling()
+
+        if image_overlay:
+            image_overlay.remove_overlay(overlay)
+
+    def _on_tagging_complete(self, view_model, success: bool, message: str, wallpaper_path: str):
+        """Handle tagging completion."""
+        if success:
+            if self.toast_service:
+                self.toast_service.show_success(message)
+            card = self._path_card_map.get(wallpaper_path)
+            if card:
+                self._hide_tag_overlay(card)
+                self._refresh_wallpaper_card_by_path(wallpaper_path)
+            else:
+                for wp in self.view_model.wallpapers:
+                    if wp in self._wallpaper_card_map:
+                        card = self._wallpaper_card_map[wp]
+                        self._hide_tag_overlay(card)
+                        self._refresh_wallpaper_card(wp)
+                        break
+        else:
+            if self.toast_service:
+                self.toast_service.show_error(message)
+            card = self._path_card_map.get(wallpaper_path)
+            if card:
+                self._hide_tag_overlay(card)
+
+    def _on_tagging_queue_changed(self, view_model, queue_size: int, active_count: int):
+        """Handle tagging queue changes."""
+        if queue_size == 0 and active_count == 0:
+            if self.toast_service:
+                self.toast_service.show_info("All tags generated")
 
     def _show_upscale_overlay(self, card):
         """Show blocking overlay with spinner on the card's image."""
@@ -849,9 +996,7 @@ class LocalView(Adw.BreakpointBin):
         if image_overlay:
             image_overlay.remove_overlay(overlay)
 
-    def _on_upscale_complete(
-        self, view_model, success: bool, message: str, wallpaper_path: str
-    ):
+    def _on_upscale_complete(self, view_model, success: bool, message: str, wallpaper_path: str):
         """Handle upscaling completion."""
         if success:
             if self.toast_service:
@@ -911,9 +1056,7 @@ class LocalView(Adw.BreakpointBin):
                 image.set_paintable(texture)
 
         if self.thumbnail_loader:
-            self.thumbnail_loader.load_thumbnail_async(
-                str(wallpaper.path), on_thumbnail_loaded
-            )
+            self.thumbnail_loader.load_thumbnail_async(str(wallpaper.path), on_thumbnail_loaded)
 
         # Add flash effect
         card.add_css_class("flash-animation")
@@ -927,27 +1070,14 @@ class LocalView(Adw.BreakpointBin):
         if not card:
             return
 
-        # Get the image widget (first child is Overlay, get its child)
-        first_child = card.get_first_child()
-        if not first_child or not isinstance(first_child, Gtk.Overlay):
-            return
+        wallpaper = None
+        for wp in self.view_model.wallpapers:
+            if str(wp.path) == path:
+                wallpaper = wp
+                break
 
-        image = first_child.get_child()
-        if not image or not isinstance(image, Gtk.Picture):
-            return
-
-        # Load new thumbnail
-        def on_thumbnail_loaded(texture):
-            if texture:
-                image.set_paintable(texture)
-
-        if self.thumbnail_loader:
-            self.thumbnail_loader.load_thumbnail_async(path, on_thumbnail_loaded)
-
-        # Update metadata labels with new resolution and size
         metadata_label = self._metadata_labels.get(path)
-        if metadata_label and self.thumbnail_loader:
-            # Reload resolution and size from file
+        if metadata_label:
             try:
                 import os
 
@@ -956,7 +1086,6 @@ class LocalView(Adw.BreakpointBin):
                 file_path = path
                 file_stat = os.stat(file_path)
 
-                # Get resolution
                 resolution_text = ""
                 try:
                     with Image.open(file_path) as img:
@@ -965,7 +1094,6 @@ class LocalView(Adw.BreakpointBin):
                 except Exception:
                     pass
 
-                # Get size
                 size = file_stat.st_size
                 if size >= 1024 * 1024:
                     size_str = f"{size / (1024 * 1024):.1f} MB"
@@ -974,7 +1102,6 @@ class LocalView(Adw.BreakpointBin):
                 else:
                     size_str = f"{size} B"
 
-                # Update label
                 parts = []
                 if resolution_text:
                     parts.append(resolution_text)
@@ -983,7 +1110,20 @@ class LocalView(Adw.BreakpointBin):
             except Exception:
                 pass
 
-        # Add flash effect
+        tags_label = self._tags_labels.get(path)
+        if tags_label and wallpaper:
+            if wallpaper.tags:
+                display_tags = wallpaper.tags[:5]
+                tags_text = " ".join(f"#{tag}" for tag in display_tags)
+                if len(wallpaper.tags) > 5:
+                    tags_text += f" +{len(wallpaper.tags) - 5}"
+                tags_label.set_text(tags_text)
+                tags_label.set_tooltip_text(" • ".join(wallpaper.tags))
+                tags_label.remove_css_class("dim-label")
+            else:
+                tags_label.set_text("No tags")
+                tags_label.add_css_class("dim-label")
+
         card.add_css_class("flash-animation")
         GLib.timeout_add(100, lambda: card.remove_css_class("flash-animation"))
         GLib.timeout_add(200, lambda: card.add_css_class("flash-animation"))

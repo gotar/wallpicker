@@ -22,6 +22,7 @@ class LocalWallpaper(GObject.Object):
         size: int,
         modified_time: float,
         resolution=None,
+        tags=None,
     ):
         super().__init__()
         self.path = path
@@ -29,6 +30,7 @@ class LocalWallpaper(GObject.Object):
         self.size = size
         self.modified_time = modified_time
         self._resolution = resolution
+        self._tags = tags if tags is not None else []
 
     @property
     def resolution(self):
@@ -40,6 +42,17 @@ class LocalWallpaper(GObject.Object):
     def resolution(self, value):
         self._resolution = value
 
+    @property
+    def tags(self) -> list[str]:
+        """Get tags, loading from cache if needed."""
+        if not self._tags:
+            self._load_tags()
+        return self._tags
+
+    @tags.setter
+    def tags(self, value: list[str]):
+        self._tags = value
+
     def _load_resolution(self):
         try:
             from PIL import Image
@@ -49,6 +62,16 @@ class LocalWallpaper(GObject.Object):
                 self._resolution = f"{width}x{height}"
         except Exception:
             self._resolution = ""
+
+    def _load_tags(self):
+        """Load tags from tag storage service."""
+        try:
+            from services.tag_storage import TagStorageService
+
+            storage = TagStorageService()
+            self._tags = storage.get_tags(self.path)
+        except Exception:
+            self._tags = []
 
 
 class LocalWallpaperService:
@@ -64,9 +87,7 @@ class LocalWallpaperService:
     def get_wallpapers(self, recursive: bool = True) -> list[LocalWallpaper]:
         return self._get_wallpapers_sync(recursive=recursive)
 
-    async def get_wallpapers_async(
-        self, recursive: bool = True
-    ) -> list[LocalWallpaper]:
+    async def get_wallpapers_async(self, recursive: bool = True) -> list[LocalWallpaper]:
         return await asyncio.to_thread(self._get_wallpapers_sync, recursive)
 
     def _get_wallpapers_sync(self, recursive: bool = True) -> list[LocalWallpaper]:
@@ -88,10 +109,7 @@ class LocalWallpaperService:
                 pattern = "*"
 
             for file_path in self.pictures_dir.glob(pattern):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
-                ):
+                if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
                     stat = file_path.stat()
 
                     # Defer resolution reading - too expensive at scan time
@@ -139,16 +157,30 @@ class LocalWallpaperService:
         if not wallpapers_list:
             return []
 
-        filenames = [w.filename for w in wallpapers_list]
+        query_lower = query.lower()
 
-        results = process.extract(
-            query, filenames, scorer=fuzz.partial_ratio, limit=len(wallpapers_list)
-        )
-
+        # Score by combining filename fuzzy match and tag match
         scored_wallpapers = []
-        for _filename, score, index in results:
+        for wp in wallpapers_list:
+            score = 0
+
+            # Filename fuzzy match
+            filename_result = process.extract(
+                query, [wp.filename], scorer=fuzz.partial_ratio, limit=1
+            )
+            if filename_result:
+                filename, fn_score, _ = filename_result[0]
+                if fn_score >= 50:
+                    score = max(score, fn_score)
+
+            # Tag exact match (bonus points)
+            for tag in wp.tags:
+                if query_lower in tag.lower():
+                    score = max(score, 80)  # Tag match is strong signal
+                    break
+
             if score >= 50:
-                scored_wallpapers.append((wallpapers_list[index], score))
+                scored_wallpapers.append((wp, score))
 
         scored_wallpapers.sort(key=lambda x: x[1], reverse=True)
         return [wp for wp, _ in scored_wallpapers]

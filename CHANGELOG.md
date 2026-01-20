@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-20
+
+### Added
+- **AI Image Tagging**: Automatic semantic tag generation for local wallpapers using CLIP (ViT-B/32)
+  - Generate tags like "mountain", "sunset", "flower", "anime", etc.
+  - Manual tag generation via button on each wallpaper card
+  - Auto-tagging queue processes untagged images on startup (2 concurrent)
+  - Persistent tag cache in `~/.cache/wallpicker/tags/`
+  - Tags display below wallpaper metadata in hashtag format (#tag1 #tag2 +N)
+  - Tooltip shows all tags on hover
+  - Visual feedback: spinner overlay during generation, flash animation on completion
+  - Config option `tagger_enabled` (default: false)
+  - Search integration: finds wallpapers by tags with bonus scoring
+
+### Changed
+- **Asyncio Integration**: Rewrote event loop handling for GTK4 compatibility
+  - Now uses background thread with `asyncio.run_forever()`
+  - Fixed wallpaper loading issues on startup
+  - Proper thread-safe coroutine scheduling via `run_coroutine_threadsafe()`
+
+### Fixed
+- **Wallpaper loading on startup**: Fixed critical bug where wallpapers wouldn't load
+  - Root cause: incompatible asyncio event loop integration
+  - Solution: proper threading with dedicated event loop
+- **Tag display**: Tags now appear immediately after generation
+  - Fixed refresh mechanism to update labels without reloading thumbnails
+  - Prevents executor shutdown errors during tag generation
+- **ToastService initialization**: Now properly initialized after window creation
+
+### Dependencies
+- Added `clip-anytorch>=1.0.0` (optional) - AI image tagging with CLIP model
+
 ## [2.3.0] - 2026-01-18
 
 ### Fixed
